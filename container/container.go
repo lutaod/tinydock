@@ -5,10 +5,12 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+
+	"github.com/lutaod/tinydock/cgroups"
 )
 
 // Create sets up the stage for the container's init process.
-func Create(interactive bool, args []string) error {
+func Create(interactive bool, memoryLimit string, cpuLimit float64, args []string) error {
 	// Prepare to re-execute the current program with the "init" argument
 	cmd := exec.Command("/proc/self/exe", append([]string{"init"}, args...)...)
 
@@ -33,7 +35,39 @@ func Create(interactive bool, args []string) error {
 		return err
 	}
 
+	pid := cmd.Process.Pid
 	log.Printf("Container process started with PID %d", cmd.Process.Pid)
+
+	// Generate an unique container name and initialize its corresponding cgroup
+	containerID, err := cgroups.Create()
+	if err != nil {
+		return err
+	}
+
+	// Ensure the cgroup is removed after the container process ends
+	defer func() {
+		if err := cgroups.Remove(containerID); err != nil {
+			log.Printf("Container %s cleanup error: %v", containerID, err)
+		}
+	}()
+
+	if err := cgroups.AddProcess(containerID, pid); err != nil {
+		return err
+	}
+
+	// Set memory and CPU limits if provided
+	if memoryLimit != "" {
+		if err := cgroups.SetMemoryLimit(containerID, memoryLimit); err != nil {
+			return err
+		}
+	}
+	if cpuLimit != 0 {
+		if err := cgroups.SetCPULimit(containerID, cpuLimit); err != nil {
+			return err
+		}
+	}
+
+	log.Printf("Container %s cgroups initialized", containerID)
 
 	if err := cmd.Wait(); err != nil {
 		return err

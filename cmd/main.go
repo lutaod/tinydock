@@ -31,16 +31,18 @@ func main() {
 
 	runFlagSet := flag.NewFlagSet("run", flag.ExitOnError)
 	interactive := runFlagSet.Bool("it", false, "Run container in interactive mode")
+	memoryLimit := runFlagSet.String("m", "", "Memory limit (e.g., 100m)")
+	cpuLimit := runFlagSet.Float64("c", 0, "CPU limit (e.g., 0.5 for 50% of one core)")
 	runCmd := &ffcli.Command{
 		Name:       "run",
 		ShortHelp:  "Create and run a new container",
-		ShortUsage: "tinydock run [-it]",
+		ShortUsage: "tinydock run [-it] [-m MEMORY] [-c CPU] COMMAND",
 		FlagSet:    runFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
 				return fmt.Errorf("'tinydock run' requires at least 1 argument")
 			}
-			return container.Create(*interactive, args)
+			return container.Create(*interactive, *memoryLimit, *cpuLimit, args)
 		},
 	}
 
