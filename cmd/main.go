@@ -9,7 +9,7 @@ import (
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
-	"github.com/lutaod/tinydock/container"
+	"github.com/lutaod/tinydock/internal/container"
 )
 
 const appName = "tinydock"

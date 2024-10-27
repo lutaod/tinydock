@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/lutaod/tinydock/cgroups"
+	"github.com/lutaod/tinydock/internal/cgroups"
 )
 
 // Create sets up the stage for the container's init process.
