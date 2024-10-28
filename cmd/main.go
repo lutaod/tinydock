@@ -15,7 +15,7 @@ import (
 const appName = "tinydock"
 
 func main() {
-	// Handle "init" argument, which signals that current process should act as init process
+	// Handle "init" argument, which signals that current process should act as the init process
 	// (PID 1) of container
 	if len(os.Args) > 1 && os.Args[1] == "init" {
 		if err := container.Run(); err != nil {

@@ -18,7 +18,7 @@ const (
 	cgroupSuffix = ".scope"
 )
 
-// Create creates the cgroup directory for the container.
+// Create creates a cgroup directory for container.
 func Create() (string, error) {
 	containerID := uuid.New().String()
 	cgroupPath := filepath.Join(cgroupRoot, cgroupSlice, cgroupPrefix+containerID+cgroupSuffix)
@@ -30,7 +30,7 @@ func Create() (string, error) {
 	return containerID, nil
 }
 
-// AddProcess adds the container process to the cgroup.
+// AddProcess adds container process to cgroup.
 func AddProcess(containerID string, pid int) error {
 	procsPath := filepath.Join(
 		cgroupRoot,
@@ -46,7 +46,7 @@ func AddProcess(containerID string, pid int) error {
 	return nil
 }
 
-// Remove removes the cgroup directory after the container process ends.
+// Remove deletes cgroup directory after container process ends.
 func Remove(containerID string) error {
 	cgroupPath := filepath.Join(cgroupSlice, cgroupPrefix+containerID+cgroupSuffix)
 
@@ -58,7 +58,7 @@ func Remove(containerID string) error {
 	return nil
 }
 
-// SetMemoryLimit sets the memory limit for the container.
+// SetMemoryLimit sets memory limit for container.
 func SetMemoryLimit(containerID, limit string) error {
 	memoryLimitPath := filepath.Join(
 		cgroupRoot,
@@ -74,7 +74,7 @@ func SetMemoryLimit(containerID, limit string) error {
 	return nil
 }
 
-// SetCPULimit sets the CPU limit for the container.
+// SetCPULimit sets CPU limit for container.
 func SetCPULimit(containerID string, limit float64) error {
 	availableCores := runtime.NumCPU()
 	if limit > float64(availableCores) {
@@ -92,7 +92,7 @@ func SetCPULimit(containerID string, limit float64) error {
 		"cpu.max",
 	)
 
-	// Convert the limit to standard format
+	// Convert limit to standard format
 	period := 100000
 	quota := int(limit * float64(period))
 	formattedLimit := fmt.Sprintf("%d %d", quota, period)
@@ -104,7 +104,7 @@ func SetCPULimit(containerID string, limit float64) error {
 	return nil
 }
 
-// Helper function to write content to a file.
+// writeFile writes content to file at specified path.
 func writeFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0644)
 }

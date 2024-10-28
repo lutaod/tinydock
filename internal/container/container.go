@@ -24,10 +24,10 @@ func Create(interactive bool, memoryLimit string, cpuLimit float64, args []strin
 	// Prepare to re-execute current program with "init" argument
 	cmd := exec.Command("/proc/self/exe", "init")
 
-	// Pass read end of pipe as file descriptor 3 to container process
+	// Pass read end of pipe as fd 3 to container process
 	cmd.ExtraFiles = []*os.File{reader}
 
-	// Set up namespace isolation for the container
+	// Set up namespace isolation for container
 	// NOTE: CLONE_NEWUSER is removed for mounting procfs
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags: syscall.CLONE_NEWUTS |
@@ -94,7 +94,7 @@ func Create(interactive bool, memoryLimit string, cpuLimit float64, args []strin
 	return nil
 }
 
-// Run takes over after the Create function and executes user command inside the container.
+// Run takes over after container creation and executes user command inside container.
 func Run() error {
 	// Retrieve command arguments written by parent process
 	argv, err := readArgsFromPipe()
@@ -128,7 +128,7 @@ func Run() error {
 	return nil
 }
 
-// writeArgsToPipe writes command arguments to the write end of a pipe.
+// writeArgsToPipe writes command arguments to write end of a pipe.
 func writeArgsToPipe(writer *os.File, args []string) error {
 	// Write args as single string with newline separators
 	argsString := strings.Join(args, "\n")
@@ -143,7 +143,7 @@ func writeArgsToPipe(writer *os.File, args []string) error {
 	return nil
 }
 
-// readArgsFromPipe reads command arguments from the pipe on file descriptor 3.
+// readArgsFromPipe reads command arguments from pipe on fd 3.
 func readArgsFromPipe() ([]string, error) {
 	reader := os.NewFile(uintptr(3), "pipe")
 	defer reader.Close()
