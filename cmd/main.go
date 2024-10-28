@@ -15,15 +15,10 @@ import (
 const appName = "tinydock"
 
 func main() {
-	// Handle the "init" argument, which signals that this process should act as the container's
-	// init process.
+	// Handle "init" argument, which signals that current process should act as init process
+	// (PID 1) of container
 	if len(os.Args) > 1 && os.Args[1] == "init" {
-		if len(os.Args) < 3 {
-			log.Fatal("Missing command to execute in the container")
-		}
-		command := os.Args[2]
-		args := os.Args[3:]
-		if err := container.Run(command, args); err != nil {
+		if err := container.Run(); err != nil {
 			log.Fatal(err)
 		}
 		return
