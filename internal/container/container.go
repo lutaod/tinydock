@@ -114,8 +114,14 @@ func Run() error {
 		return fmt.Errorf("failed to mount procfs: %w", err)
 	}
 
+	// Find absolute path of command
+	path, err := exec.LookPath(argv[0])
+	if err != nil {
+		return fmt.Errorf("command not found: %w", err)
+	}
+
 	// Execute user command in place of current process
-	if err := syscall.Exec(argv[0], argv, os.Environ()); err != nil {
+	if err := syscall.Exec(path, argv, os.Environ()); err != nil {
 		return err
 	}
 
