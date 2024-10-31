@@ -206,5 +206,11 @@ func setupMounts() error {
 		return fmt.Errorf("failed to mount procfs: %w", err)
 	}
 
+	// Mount /dev using tmpfs for device isolation
+	mountDevFlags := syscall.MS_NOSUID | syscall.MS_STRICTATIME
+	if err := syscall.Mount("tmpfs", "/dev", "tmpfs", uintptr(mountDevFlags), "mode=755"); err != nil {
+		return fmt.Errorf("failed to mount /dev: %w", err)
+	}
+
 	return nil
 }
