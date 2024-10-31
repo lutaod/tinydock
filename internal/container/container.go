@@ -43,6 +43,9 @@ func Create(interactive bool, memoryLimit string, cpuLimit float64, args []strin
 		cmd.Stderr = os.Stderr
 	}
 
+	// NOTE: fs extracted from busybox image will be used as container root
+	cmd.Dir = "/root/busybox"
+
 	// Spawn container process
 	if err := cmd.Start(); err != nil {
 		reader.Close()
@@ -102,16 +105,8 @@ func Run() error {
 		return err
 	}
 
-	// Make container mounts private to prevent propagation to host
-	mountPropagationFlags := syscall.MS_SLAVE | syscall.MS_REC
-	if err := syscall.Mount("", "/", "", uintptr(mountPropagationFlags), ""); err != nil {
-		return fmt.Errorf("failed to modify root mount propagation: %w", err)
-	}
-
-	// Mount procfs for process information
-	mountProcFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
-	if err := syscall.Mount("proc", "/proc", "proc", uintptr(mountProcFlags), ""); err != nil {
-		return fmt.Errorf("failed to mount procfs: %w", err)
+	if err := setupMounts(); err != nil {
+		return err
 	}
 
 	// Find absolute path of command
@@ -157,4 +152,59 @@ func readArgsFromPipe() ([]string, error) {
 	args := strings.Split(strings.TrimSpace(string(data)), "\n")
 
 	return args, nil
+}
+
+// setupMounts configures container mounts and root filesystem.
+func setupMounts() error {
+	// Get new root (set by cmd.Dir in parent)
+	newRoot, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Make container mounts private to prevent propagation to host
+	mountPropagationFlags := syscall.MS_SLAVE | syscall.MS_REC
+	if err := syscall.Mount("", "/", "", uintptr(mountPropagationFlags), ""); err != nil {
+		return fmt.Errorf("failed to modify root mount propagation: %w", err)
+	}
+
+	// Create bind mount of new rootfs for pivot_root
+	mountBindFlags := syscall.MS_BIND | syscall.MS_REC
+	if err := syscall.Mount(newRoot, newRoot, "", uintptr(mountBindFlags), ""); err != nil {
+		return fmt.Errorf("failed to create bind mount: %w", err)
+	}
+
+	// Change working directory to new root before pivot_root
+	if err := os.Chdir(newRoot); err != nil {
+		return fmt.Errorf("failed to change directory: %w", err)
+	}
+
+	// Create temporary directory for old root
+	putOld := ".old_root"
+	if err := os.MkdirAll(putOld, 0700); err != nil {
+		return fmt.Errorf("failed to create temporary root dir: %w", err)
+	}
+
+	// Move root mount from old root to new root
+	if err := syscall.PivotRoot(".", putOld); err != nil {
+		return fmt.Errorf("failed to pivot root: %w", err)
+	}
+
+	// Unmount old root
+	if err := syscall.Unmount(putOld, syscall.MNT_DETACH); err != nil {
+		return fmt.Errorf("failed to unmount old root: %w", err)
+	}
+
+	// Remove old root mount point
+	if err := os.RemoveAll(putOld); err != nil {
+		return fmt.Errorf("failed to remove old root: %w", err)
+	}
+
+	// Mount procfs for process information
+	mountProcFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
+	if err := syscall.Mount("proc", "/proc", "proc", uintptr(mountProcFlags), ""); err != nil {
+		return fmt.Errorf("failed to mount procfs: %w", err)
+	}
+
+	return nil
 }
