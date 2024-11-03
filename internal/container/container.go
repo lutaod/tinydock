@@ -9,7 +9,10 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/google/uuid"
+
 	"github.com/lutaod/tinydock/internal/cgroups"
+	"github.com/lutaod/tinydock/internal/overlay"
 )
 
 // Create spawns a container process that initially acts as the init process (PID 1) before
@@ -43,8 +46,25 @@ func Create(interactive bool, memoryLimit string, cpuLimit float64, args []strin
 		cmd.Stderr = os.Stderr
 	}
 
-	// NOTE: fs extracted from busybox image will be used as container root
-	cmd.Dir = "/root/busybox"
+	// Generate a unique container ID
+	containerID := uuid.New().String()
+
+	// Initialize overlay filesystem for container
+	mergedDir, err := overlay.SetupOverlay(containerID)
+	if err != nil {
+		return fmt.Errorf("failed to setup overlay: %w", err)
+	}
+
+	defer func() {
+		if err := overlay.CleanupOverlay(containerID); err != nil {
+			log.Printf("Container %s overlay cleanup error: %v", containerID, err)
+		}
+	}()
+
+	// Set merged overlay directory as working directory for container's root filesystem
+	cmd.Dir = mergedDir
+
+	log.Printf("Container %s overlayfs initialized", containerID)
 
 	// Spawn container process
 	if err := cmd.Start(); err != nil {
@@ -59,16 +79,15 @@ func Create(interactive bool, memoryLimit string, cpuLimit float64, args []strin
 	pid := cmd.Process.Pid
 	log.Printf("Container process started with PID %d", cmd.Process.Pid)
 
-	// Generate a unique container ID and initialize its corresponding cgroup
-	containerID, err := cgroups.Create()
-	if err != nil {
+	// Initialize cgroup for container
+	if err := cgroups.Create(containerID); err != nil {
 		return err
 	}
 
-	// Ensure cgroup is removed after container process exits
+	// Ensure cgroup is removed after container exits
 	defer func() {
 		if err := cgroups.Remove(containerID); err != nil {
-			log.Printf("Container %s cleanup error: %v", containerID, err)
+			log.Printf("Container %s cgroups cleanup error: %v", containerID, err)
 		}
 	}()
 
@@ -156,16 +175,17 @@ func readArgsFromPipe() ([]string, error) {
 
 // setupMounts configures container mounts and root filesystem.
 func setupMounts() error {
-	// Get new root (set by cmd.Dir in parent)
-	newRoot, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
-	}
 
 	// Make container mounts private to prevent propagation to host
 	mountPropagationFlags := syscall.MS_SLAVE | syscall.MS_REC
 	if err := syscall.Mount("", "/", "", uintptr(mountPropagationFlags), ""); err != nil {
 		return fmt.Errorf("failed to modify root mount propagation: %w", err)
+	}
+
+	// Get new root (set by cmd.Dir in parent)
+	newRoot, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
 	// Create bind mount of new rootfs for pivot_root

@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-
-	"github.com/google/uuid"
 )
 
 const (
@@ -19,15 +17,14 @@ const (
 )
 
 // Create creates a cgroup directory for container.
-func Create() (string, error) {
-	containerID := uuid.New().String()
+func Create(containerID string) error {
 	cgroupPath := filepath.Join(cgroupRoot, cgroupSlice, cgroupPrefix+containerID+cgroupSuffix)
 
 	if err := os.MkdirAll(cgroupPath, 0755); err != nil && !os.IsExist(err) {
-		return "", fmt.Errorf("failed to create cgroup for container %s: %w", containerID, err)
+		return fmt.Errorf("failed to create cgroup for container %s: %w", containerID, err)
 	}
 
-	return containerID, nil
+	return nil
 }
 
 // AddProcess adds container process to cgroup.
