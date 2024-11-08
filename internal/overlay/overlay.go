@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/lutaod/tinydock/assets"
+	"github.com/lutaod/tinydock/internal/volume"
 )
 
 const (
@@ -20,8 +21,8 @@ const (
 	mergedDir    = "merged"
 )
 
-// setupOverlay prepares overlay filesystem for a container.
-func SetupOverlay(containerID string) (string, error) {
+// Setup prepares overlay filesystem and mount volumes for a container.
+func Setup(containerID string, volumes volume.Volumes) (string, error) {
 	paths := map[string]string{
 		upperDir:  filepath.Join(tinydockRoot, overlayDir, containerID, upperDir),
 		workDir:   filepath.Join(tinydockRoot, overlayDir, containerID, workDir),
@@ -49,12 +50,40 @@ func SetupOverlay(containerID string) (string, error) {
 		return "", fmt.Errorf("failed to mount overlayfs: %w", err)
 	}
 
+	for _, v := range volumes {
+		target := filepath.Join(paths[mergedDir], v.Target)
+
+		// Create host source directory if does not exist
+		if _, err := os.Stat(v.Source); os.IsNotExist(err) {
+			if err := os.MkdirAll(v.Source, 0755); err != nil {
+				return "", fmt.Errorf("failed to create volume source %s: %w", v.Source, err)
+			}
+		} else if err != nil {
+			return "", fmt.Errorf("failed to check volume source %s: %w", v.Source, err)
+		}
+
+		if err := os.MkdirAll(target, 0755); err != nil {
+			return "", fmt.Errorf("failed to create volume target %s: %w", target, err)
+		}
+
+		if err := syscall.Mount(v.Source, target, "", uintptr(syscall.MS_BIND), ""); err != nil {
+			return "", fmt.Errorf("failed to mount volume %s to %s: %w", v.Source, target, err)
+		}
+	}
+
 	return paths[mergedDir], nil
 }
 
-// cleanupOverlay removes all overlay filesystem resources for a container.
-func CleanupOverlay(containerID string) error {
+// Cleanup unmounts any volumes and removes all overlay filesystem resources for a container.
+func Cleanup(containerID string, volumes volume.Volumes) error {
 	mergedPath := filepath.Join(tinydockRoot, overlayDir, containerID, mergedDir)
+
+	for _, v := range volumes {
+		target := filepath.Join(mergedPath, v.Target)
+		if err := syscall.Unmount(target, 0); err != nil {
+			return fmt.Errorf("failed to unmount volume %s: %w", target, err)
+		}
+	}
 
 	if err := syscall.Unmount(mergedPath, 0); err != nil {
 		return fmt.Errorf("failed to unmount overlayfs: %w", err)

@@ -13,11 +13,12 @@ import (
 
 	"github.com/lutaod/tinydock/internal/cgroups"
 	"github.com/lutaod/tinydock/internal/overlay"
+	"github.com/lutaod/tinydock/internal/volume"
 )
 
 // Create spawns a container process that initially acts as the init process (PID 1) before
 // being replaced by user command.
-func Create(interactive bool, memoryLimit string, cpuLimit float64, args []string) error {
+func Create(interactive bool, memoryLimit string, cpuLimit float64, volumes volume.Volumes, args []string) error {
 	// Create unnamed pipe for passing user command
 	reader, writer, err := os.Pipe()
 	if err != nil {
@@ -50,13 +51,13 @@ func Create(interactive bool, memoryLimit string, cpuLimit float64, args []strin
 	containerID := uuid.New().String()
 
 	// Initialize overlay filesystem for container
-	mergedDir, err := overlay.SetupOverlay(containerID)
+	mergedDir, err := overlay.Setup(containerID, volumes)
 	if err != nil {
 		return fmt.Errorf("failed to setup overlay: %w", err)
 	}
 
 	defer func() {
-		if err := overlay.CleanupOverlay(containerID); err != nil {
+		if err := overlay.Cleanup(containerID, volumes); err != nil {
 			log.Printf("Container %s overlay cleanup error: %v", containerID, err)
 		}
 	}()
@@ -175,7 +176,6 @@ func readArgsFromPipe() ([]string, error) {
 
 // setupMounts configures container mounts and root filesystem.
 func setupMounts() error {
-
 	// Make container mounts private to prevent propagation to host
 	mountPropagationFlags := syscall.MS_SLAVE | syscall.MS_REC
 	if err := syscall.Mount("", "/", "", uintptr(mountPropagationFlags), ""); err != nil {
