@@ -18,7 +18,7 @@ import (
 
 // Create spawns a container process that initially acts as the init process (PID 1) before
 // being replaced by user command.
-func Create(interactive bool, memoryLimit string, cpuLimit float64, volumes volume.Volumes, args []string) error {
+func Create(interactive, detached bool, memoryLimit string, cpuLimit float64, volumes volume.Volumes, args []string) error {
 	// Create unnamed pipe for passing user command
 	reader, writer, err := os.Pipe()
 	if err != nil {
@@ -39,6 +39,7 @@ func Create(interactive bool, memoryLimit string, cpuLimit float64, volumes volu
 			syscall.CLONE_NEWPID |
 			syscall.CLONE_NEWNS |
 			syscall.CLONE_NEWNET,
+		Setpgid: detached,
 	}
 
 	if interactive {
@@ -56,11 +57,13 @@ func Create(interactive bool, memoryLimit string, cpuLimit float64, volumes volu
 		return fmt.Errorf("failed to setup overlay: %w", err)
 	}
 
-	defer func() {
-		if err := overlay.Cleanup(containerID, volumes); err != nil {
-			log.Printf("Container %s overlay cleanup error: %v", containerID, err)
-		}
-	}()
+	if !detached {
+		defer func() {
+			if err := overlay.Cleanup(containerID, volumes); err != nil {
+				log.Printf("Container %s overlay cleanup error: %v", containerID, err)
+			}
+		}()
+	}
 
 	// Set merged overlay directory as working directory for container's root filesystem
 	cmd.Dir = mergedDir
@@ -85,12 +88,13 @@ func Create(interactive bool, memoryLimit string, cpuLimit float64, volumes volu
 		return err
 	}
 
-	// Ensure cgroup is removed after container exits
-	defer func() {
-		if err := cgroups.Remove(containerID); err != nil {
-			log.Printf("Container %s cgroups cleanup error: %v", containerID, err)
-		}
-	}()
+	if !detached {
+		defer func() {
+			if err := cgroups.Remove(containerID); err != nil {
+				log.Printf("Container %s cgroups cleanup error: %v", containerID, err)
+			}
+		}()
+	}
 
 	if err := cgroups.AddProcess(containerID, pid); err != nil {
 		return err
@@ -109,6 +113,15 @@ func Create(interactive bool, memoryLimit string, cpuLimit float64, volumes volu
 	}
 
 	log.Printf("Container %s cgroups initialized", containerID)
+
+	if detached {
+		if err := cmd.Process.Release(); err != nil {
+			return fmt.Errorf("failed to release container: %w", err)
+		}
+
+		log.Println(containerID)
+		return nil
+	}
 
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("failed to wait for conatiner: %w", err)

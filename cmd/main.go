@@ -30,6 +30,8 @@ func main() {
 
 	interactive := runFlagSet.Bool("it", false, "Run container in interactive mode")
 
+	detached := runFlagSet.Bool("d", false, "Run container in detached mode")
+
 	memoryLimit := runFlagSet.String("m", "", "Memory limit (e.g., 100m)")
 
 	cpuLimit := runFlagSet.Float64("c", 0, "CPU limit (e.g., 0.5 for 50% of one core)")
@@ -46,7 +48,10 @@ func main() {
 			if len(args) == 0 {
 				return fmt.Errorf("'tinydock run' requires at least 1 argument")
 			}
-			return container.Create(*interactive, *memoryLimit, *cpuLimit, volumes, args)
+			if *interactive && *detached {
+				return fmt.Errorf("detached container cannot be interactive")
+			}
+			return container.Create(*interactive, *detached, *memoryLimit, *cpuLimit, volumes, args)
 		},
 	}
 
