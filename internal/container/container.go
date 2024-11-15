@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -16,9 +17,17 @@ import (
 	"github.com/lutaod/tinydock/internal/volume"
 )
 
-// Create spawns a container process that initially acts as the init process (PID 1) before
-// being replaced by user command.
-func Create(interactive, detached bool, memoryLimit string, cpuLimit float64, volumes volume.Volumes, args []string) error {
+// Create spawns a container process that initially acts as the init process (PID 1)
+// before being replaced by user command.
+func Create(
+	interactive bool,
+	detached bool,
+	name string,
+	memoryLimit string,
+	cpuLimit float64,
+	volumes volume.Volumes,
+	args []string,
+) error {
 	// Create unnamed pipe for passing user command
 	reader, writer, err := os.Pipe()
 	if err != nil {
@@ -49,18 +58,23 @@ func Create(interactive, detached bool, memoryLimit string, cpuLimit float64, vo
 	}
 
 	// Generate a unique container ID
-	containerID := uuid.New().String()
+	id := uuid.New().String()
+
+	if name == "" {
+		name = id
+	}
 
 	// Initialize overlay filesystem for container
-	mergedDir, err := overlay.Setup(containerID, volumes)
+	mergedDir, err := overlay.Setup(id, volumes)
 	if err != nil {
 		return fmt.Errorf("failed to setup overlay: %w", err)
 	}
 
+	// TODO: Move cleanups to dedicated removal function
 	if !detached {
 		defer func() {
-			if err := overlay.Cleanup(containerID, volumes); err != nil {
-				log.Printf("Container %s overlay cleanup error: %v", containerID, err)
+			if err := overlay.Cleanup(id, volumes); err != nil {
+				log.Printf("Container %s overlay cleanup error: %v", id, err)
 			}
 		}()
 	}
@@ -68,7 +82,7 @@ func Create(interactive, detached bool, memoryLimit string, cpuLimit float64, vo
 	// Set merged overlay directory as working directory for container's root filesystem
 	cmd.Dir = mergedDir
 
-	log.Printf("Container %s overlayfs initialized", containerID)
+	log.Printf("Container %s overlayfs initialized", id)
 
 	// Spawn container process
 	if err := cmd.Start(); err != nil {
@@ -83,49 +97,73 @@ func Create(interactive, detached bool, memoryLimit string, cpuLimit float64, vo
 	pid := cmd.Process.Pid
 	log.Printf("Container process started with PID %d", cmd.Process.Pid)
 
+	// Record container information locally
+	info := &info{
+		ID:        id,
+		Name:      name,
+		PID:       pid,
+		Status:    running,
+		Command:   args,
+		CreatedAt: time.Now(),
+	}
+
+	if err := saveInfo(info); err != nil {
+		return err
+	}
+
+	defer func() {
+		if info.Status != running {
+			if err := saveInfo(info); err != nil {
+				log.Printf("Failed to update container %s status: %v", id, err)
+			}
+		}
+	}()
+
 	// Initialize cgroup for container
-	if err := cgroups.Create(containerID); err != nil {
+	if err := cgroups.Create(id); err != nil {
 		return err
 	}
 
 	if !detached {
 		defer func() {
-			if err := cgroups.Remove(containerID); err != nil {
-				log.Printf("Container %s cgroups cleanup error: %v", containerID, err)
+			if err := cgroups.Remove(id); err != nil {
+				log.Printf("Container %s cgroups cleanup error: %v", id, err)
 			}
 		}()
 	}
 
-	if err := cgroups.AddProcess(containerID, pid); err != nil {
+	if err := cgroups.AddProcess(id, pid); err != nil {
 		return err
 	}
 
 	// Set memory and CPU limits if provided
 	if memoryLimit != "" {
-		if err := cgroups.SetMemoryLimit(containerID, memoryLimit); err != nil {
+		if err := cgroups.SetMemoryLimit(id, memoryLimit); err != nil {
 			return err
 		}
 	}
 	if cpuLimit != 0 {
-		if err := cgroups.SetCPULimit(containerID, cpuLimit); err != nil {
+		if err := cgroups.SetCPULimit(id, cpuLimit); err != nil {
 			return err
 		}
 	}
 
-	log.Printf("Container %s cgroups initialized", containerID)
+	log.Printf("Container %s cgroups initialized", id)
 
 	if detached {
 		if err := cmd.Process.Release(); err != nil {
 			return fmt.Errorf("failed to release container: %w", err)
 		}
+		log.Println(id)
 
-		log.Println(containerID)
 		return nil
 	}
 
 	if err := cmd.Wait(); err != nil {
+		info.Status = exited
 		return fmt.Errorf("failed to wait for conatiner: %w", err)
 	}
+	info.Status = exited
 
 	return nil
 }

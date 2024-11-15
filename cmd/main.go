@@ -32,6 +32,8 @@ func main() {
 
 	detached := runFlagSet.Bool("d", false, "Run container in detached mode")
 
+	name := runFlagSet.String("n", "", "Assign a name to container")
+
 	memoryLimit := runFlagSet.String("m", "", "Memory limit (e.g., 100m)")
 
 	cpuLimit := runFlagSet.Float64("c", 0, "CPU limit (e.g., 0.5 for 50% of one core)")
@@ -51,7 +53,15 @@ func main() {
 			if *interactive && *detached {
 				return fmt.Errorf("detached container cannot be interactive")
 			}
-			return container.Create(*interactive, *detached, *memoryLimit, *cpuLimit, volumes, args)
+			return container.Create(
+				*interactive,
+				*detached,
+				*name,
+				*memoryLimit,
+				*cpuLimit,
+				volumes,
+				args,
+			)
 		},
 	}
 
