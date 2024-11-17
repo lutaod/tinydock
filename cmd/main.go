@@ -65,6 +65,21 @@ func main() {
 		},
 	}
 
+	// Definitions related to ls command
+	lsFlagSet := flag.NewFlagSet("ls", flag.ExitOnError)
+
+	showAll := lsFlagSet.Bool("a", false, "Show all containers (default shows just running)")
+
+	lsCmd := &ffcli.Command{
+		Name:       "ls",
+		ShortUsage: "tinydock ls [flags]",
+		ShortHelp:  "List containers",
+		FlagSet:    lsFlagSet,
+		Exec: func(ctx context.Context, args []string) error {
+			return container.List(*showAll)
+		},
+	}
+
 	// Definitions related to root command
 	rootFlagSet := flag.NewFlagSet(appName, flag.ExitOnError)
 
@@ -73,7 +88,7 @@ func main() {
 		ShortHelp:   "tinydock is a minimal implementation of container runtime",
 		ShortUsage:  "tinydock COMMAND",
 		FlagSet:     rootFlagSet,
-		Subcommands: []*ffcli.Command{runCmd},
+		Subcommands: []*ffcli.Command{runCmd, lsCmd},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
 				return flag.ErrHelp

@@ -104,13 +104,13 @@ func Create(
 		CreatedAt: time.Now(),
 	}
 
-	if err := saveInfo(info); err != nil {
+	if err := save(info); err != nil {
 		return err
 	}
 
 	defer func() {
 		if info.Status != running {
-			if err := saveInfo(info); err != nil {
+			if err := save(info); err != nil {
 				log.Printf("Failed to update container %s status: %v", id, err)
 			}
 		}
@@ -189,6 +189,11 @@ func Run() error {
 	}
 
 	return nil
+}
+
+// List prints all containers, or only running ones if showAll is false.
+func List(showAll bool) error {
+	return list(showAll)
 }
 
 // writeArgsToPipe writes command arguments to write end of a pipe.
