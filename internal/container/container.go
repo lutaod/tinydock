@@ -10,8 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/lutaod/tinydock/internal/cgroups"
 	"github.com/lutaod/tinydock/internal/overlay"
 	"github.com/lutaod/tinydock/internal/volume"
@@ -57,8 +55,7 @@ func Create(
 		cmd.Stderr = os.Stderr
 	}
 
-	// Generate a unique container ID
-	id := uuid.New().String()
+	id := generateID()
 
 	if name == "" {
 		name = id

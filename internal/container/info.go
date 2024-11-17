@@ -3,12 +3,17 @@ package container
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
 )
 
-const containersDir = "/var/lib/tinydock/containers"
+const (
+	containersDir = "/var/lib/tinydock/containers"
+
+	idLength = 8
+)
 
 // status represents the runtime state of container.
 type status string
@@ -26,6 +31,18 @@ type info struct {
 	Status    status    `json:"status"`
 	Command   []string  `json:"command"`
 	CreatedAt time.Time `json:"createdAt"`
+}
+
+// generateID creates a random ID for container.
+func generateID() string {
+	const chars = "0123456789abcdef"
+
+	result := make([]byte, idLength)
+	for i := range result {
+		result[i] = chars[rand.Intn(len(chars))]
+	}
+
+	return string(result)
 }
 
 // saveInfo persists container information on disk.
