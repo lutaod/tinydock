@@ -50,9 +50,11 @@ func main() {
 			if len(args) == 0 {
 				return fmt.Errorf("'tinydock run' requires at least 1 argument")
 			}
+
 			if *interactive && *detached {
 				return fmt.Errorf("detached container cannot be interactive")
 			}
+
 			return container.Create(
 				*interactive,
 				*detached,
@@ -80,6 +82,33 @@ func main() {
 		},
 	}
 
+	// Definitions related to stop command
+	stopFlagSet := flag.NewFlagSet("stop", flag.ExitOnError)
+
+	sig := stopFlagSet.String("s", "", "Signal to send to the container")
+
+	stopCmd := &ffcli.Command{
+		Name:       "stop",
+		ShortUsage: "tinydock stop [flags] CONTAINER",
+		ShortHelp:  "Stop one or more containers",
+		FlagSet:    stopFlagSet,
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) == 0 {
+				return fmt.Errorf("'tinydock stop' requires at least 1 argument")
+			}
+
+			for _, id := range args {
+				if err := container.Stop(id, *sig); err != nil {
+					log.Printf("Error stopping container %s: %v", id, err)
+				}
+
+				log.Println(id)
+			}
+
+			return nil
+		},
+	}
+
 	// Definitions related to root command
 	rootFlagSet := flag.NewFlagSet(appName, flag.ExitOnError)
 
@@ -88,11 +117,12 @@ func main() {
 		ShortHelp:   "tinydock is a minimal implementation of container runtime",
 		ShortUsage:  "tinydock COMMAND",
 		FlagSet:     rootFlagSet,
-		Subcommands: []*ffcli.Command{runCmd, lsCmd},
+		Subcommands: []*ffcli.Command{runCmd, lsCmd, stopCmd},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
 				return flag.ErrHelp
 			}
+
 			return fmt.Errorf("'%s' is not a tinydock command.\nSee 'tinydock --help'", args[0])
 		},
 	}

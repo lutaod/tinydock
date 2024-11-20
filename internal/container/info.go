@@ -24,13 +24,10 @@ const (
 type status string
 
 const (
-	// NOTE: For detached containers, the actual process state cannot be monitored w/o
-	// a daemon process. They will remain in "running" state until explicitly stopped.
+	// NOTE: For detached containers, the actual process state cannot be monitored
+	// without daemon. Their status will remain "running" until explicitly stopped.
 	running status = "running"
-
-	exited status = "exited"
-
-	// TODO: Add other states with signal handling
+	exited  status = "exited"
 )
 
 // info stores relevant information of a container.

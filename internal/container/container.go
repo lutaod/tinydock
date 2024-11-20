@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -108,13 +109,15 @@ func Create(
 		return err
 	}
 
-	defer func() {
-		if info.Status != running {
+	// Update status of interactive containers upon exit
+	if !detached {
+		defer func() {
+			info.Status = exited
 			if err := save(info); err != nil {
-				log.Printf("Failed to update container %s status: %v", id, err)
+				log.Printf("Failed to update container status: %v", err)
 			}
-		}
-	}()
+		}()
+	}
 
 	// Initialize cgroup for container
 	if err := cgroups.Create(id); err != nil {
@@ -151,16 +154,14 @@ func Create(
 		if err := cmd.Process.Release(); err != nil {
 			return fmt.Errorf("failed to release container: %w", err)
 		}
-		log.Println(id)
 
+		log.Println(id)
 		return nil
 	}
 
 	if err := cmd.Wait(); err != nil {
-		info.Status = exited
-		return fmt.Errorf("failed to wait for conatiner: %w", err)
+		return fmt.Errorf("failed to wait for container: %w", err)
 	}
-	info.Status = exited
 
 	return nil
 }
@@ -194,6 +195,57 @@ func Run() error {
 // List prints all containers, or only running ones if showAll is false.
 func List(showAll bool) error {
 	return list(showAll)
+}
+
+// Stop sends a signal to specified container and waits for it to terminate.
+//
+// Interactive containers may not properly handle SIGTERM/SIGINT signals when
+// running in foreground, instead, users should exit them directly.
+func Stop(id, sig string) error {
+	info, err := load(id)
+	if err != nil {
+		return fmt.Errorf("no such container: %w", err)
+	}
+
+	if info.Status == exited {
+		return fmt.Errorf("container is not running")
+	}
+
+	if err := syscall.Kill(info.PID, 0); err != nil || !verifyProcess(info.PID, id) {
+		info.Status = exited
+		if err := save(info); err != nil {
+			return fmt.Errorf("failed to update container status: %w", err)
+		}
+
+		return fmt.Errorf("container already stopped")
+	}
+
+	signal := syscall.SIGTERM
+	if sig != "" {
+		signal, err = parseSignal(sig)
+		if err != nil {
+			return fmt.Errorf("failed to parse signal: %w", err)
+		}
+	}
+
+	if err := syscall.Kill(info.PID, signal); err != nil {
+		return fmt.Errorf("failed to stop container: %w", err)
+	}
+
+	// Wait for up to a second for container to stop
+	for i := 0; i < 10; i++ {
+		if err := syscall.Kill(info.PID, 0); err != nil {
+			info.Status = exited
+			if err := save(info); err != nil {
+				return fmt.Errorf("failed to update container status: %w", err)
+			}
+
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return fmt.Errorf("container did not stop")
 }
 
 // writeArgsToPipe writes command arguments to write end of a pipe.
@@ -286,4 +338,41 @@ func setupMounts() error {
 	}
 
 	return nil
+}
+
+// parseSignal parses common literal signals (e.g., SIGTERM, SIGKILL) and numeric signals.
+func parseSignal(sig string) (syscall.Signal, error) {
+	if strings.HasPrefix(sig, "SIG") {
+		s := strings.ToUpper(sig)
+		switch s {
+		case "SIGINT":
+			return syscall.SIGINT, nil
+		case "SIGTERM":
+			return syscall.SIGTERM, nil
+		case "SIGKILL":
+			return syscall.SIGKILL, nil
+		default:
+			return 0, fmt.Errorf("unsupported signal: %s", sig)
+		}
+	}
+
+	sigNum, err := strconv.Atoi(sig)
+	if err != nil {
+		return 0, fmt.Errorf("invalid signal: %s", sig)
+	}
+	return syscall.Signal(sigNum), nil
+}
+
+// verifyProcess checks if process with given PID belongs to specified container.
+//
+// Required for stopping detached containers, as without a daemon, an exited
+// container's PID could be reused by the system.
+func verifyProcess(pid int, id string) bool {
+	cgroupPath := fmt.Sprintf("/proc/%d/cgroup", pid)
+	data, err := os.ReadFile(cgroupPath)
+	if err != nil {
+		return false
+	}
+
+	return strings.Contains(string(data), id)
 }
