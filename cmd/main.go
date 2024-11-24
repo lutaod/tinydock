@@ -30,15 +30,15 @@ func main() {
 
 	interactive := runFlagSet.Bool("it", false, "Run container in interactive mode")
 
-	detached := runFlagSet.Bool("d", false, "Run container in detached mode")
-
 	autoRemove := runFlagSet.Bool("rm", false, "Automatically remove the container when it exits")
+
+	detached := runFlagSet.Bool("d", false, "Run container in detached mode")
 
 	name := runFlagSet.String("n", "", "Assign a name to container")
 
-	memoryLimit := runFlagSet.String("m", "", "Memory limit (e.g., 100m)")
-
 	cpuLimit := runFlagSet.Float64("c", 0, "CPU limit (e.g., 0.5 for 50% of one core)")
+
+	memoryLimit := runFlagSet.String("m", "", "Memory limit (e.g., 100m)")
 
 	var volumes volume.Volumes
 	runFlagSet.Var(&volumes, "v", "Bind mount a volume (e.g., /host:/container)")
@@ -46,7 +46,7 @@ func main() {
 	runCmd := &ffcli.Command{
 		Name:       "run",
 		ShortHelp:  "Create and run a new container",
-		ShortUsage: "tinydock run [-it] [-m MEMORY] [-c CPU] [-v SRC:DST]... COMMAND",
+		ShortUsage: "tinydock run (-it [-rm] | -d) [-n NAME] [-c CPU]  [-m MEMORY] [-v SRC:DST]... COMMAND",
 		FlagSet:    runFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -63,11 +63,11 @@ func main() {
 
 			return container.Create(
 				*interactive,
-				*detached,
 				*autoRemove,
+				*detached,
 				*name,
-				*memoryLimit,
 				*cpuLimit,
+				*memoryLimit,
 				volumes,
 				args,
 			)
@@ -81,7 +81,7 @@ func main() {
 
 	lsCmd := &ffcli.Command{
 		Name:       "ls",
-		ShortUsage: "tinydock ls [flags]",
+		ShortUsage: "tinydock ls [-a]",
 		ShortHelp:  "List containers",
 		FlagSet:    lsFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
@@ -96,7 +96,7 @@ func main() {
 
 	stopCmd := &ffcli.Command{
 		Name:       "stop",
-		ShortUsage: "tinydock stop [flags] CONTAINER",
+		ShortUsage: "tinydock stop [-s SIGNAL] CONTAINER",
 		ShortHelp:  "Stop one or more containers",
 		FlagSet:    stopFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
@@ -123,7 +123,7 @@ func main() {
 
 	rmCmd := &ffcli.Command{
 		Name:       "rm",
-		ShortUsage: "tinydock rm [flags] CONTAINER",
+		ShortUsage: "tinydock rm [-f] CONTAINER",
 		ShortHelp:  "Remove one or more containers",
 		FlagSet:    rmFlagSet,
 		Exec: func(ctx context.Context, args []string) error {

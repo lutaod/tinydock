@@ -20,11 +20,11 @@ import (
 // before being replaced by user command.
 func Create(
 	interactive bool,
-	detached bool,
 	autoRemove bool,
+	detached bool,
 	name string,
-	memoryLimit string,
 	cpuLimit float64,
+	memoryLimit string,
 	volumes volume.Volumes,
 	args []string,
 ) error {
