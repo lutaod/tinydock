@@ -27,6 +27,7 @@ func Create(
 	memoryLimit string,
 	volumes volume.Volumes,
 	args []string,
+	envs Envs,
 ) error {
 	// Create unnamed pipe for passing user command
 	reader, writer, err := os.Pipe()
@@ -39,6 +40,8 @@ func Create(
 
 	// Pass read end of pipe as fd 3 to container process
 	cmd.ExtraFiles = []*os.File{reader}
+
+	cmd.Env = append(os.Environ(), envs...)
 
 	// Set up namespace isolation for container
 	// NOTE: CLONE_NEWUSER is removed for mounting procfs

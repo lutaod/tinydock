@@ -43,10 +43,13 @@ func main() {
 	var volumes volume.Volumes
 	runFlagSet.Var(&volumes, "v", "Bind mount a volume (e.g., /host:/container)")
 
+	var envs container.Envs
+	runFlagSet.Var(&envs, "e", "Set environment variables")
+
 	runCmd := &ffcli.Command{
 		Name:       "run",
 		ShortHelp:  "Create and run a new container",
-		ShortUsage: "tinydock run (-it [-rm] | -d) [-n NAME] [-c CPU]  [-m MEMORY] [-v SRC:DST]... COMMAND",
+		ShortUsage: "tinydock run (-it [-rm] | -d) [-n NAME] [-c CPU]  [-m MEMORY] [-v SRC:DST]... [-e KEY=VALUE]... COMMAND",
 		FlagSet:    runFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -70,6 +73,7 @@ func main() {
 				*memoryLimit,
 				volumes,
 				args,
+				envs,
 			)
 		},
 	}
