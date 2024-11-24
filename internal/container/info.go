@@ -52,8 +52,8 @@ func generateID() string {
 	return string(result)
 }
 
-// save persists container information to disk.
-func save(info *info) error {
+// saveInfo persists container information to disk.
+func saveInfo(info *info) error {
 	infoDir := filepath.Join(containersDir, info.ID)
 	if _, err := os.Stat(infoDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(infoDir, 0755); err != nil {
@@ -74,8 +74,8 @@ func save(info *info) error {
 	return nil
 }
 
-// load retrieves container information of given ID from disk.
-func load(id string) (*info, error) {
+// loadInfo retrieves container information of given ID from disk.
+func loadInfo(id string) (*info, error) {
 	infoPath := filepath.Join(containersDir, id, infoFile)
 	data, err := os.ReadFile(infoPath)
 	if err != nil {
@@ -90,8 +90,8 @@ func load(id string) (*info, error) {
 	return &info, nil
 }
 
-// list fetches container info matching the filter condition and prints them.
-func list(showAll bool) error {
+// listInfo fetches container information matching the filter condition and prints them.
+func listInfo(showAll bool) error {
 	entries, err := os.ReadDir(containersDir)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to read containers directory: %w", err)
@@ -105,7 +105,7 @@ func list(showAll bool) error {
 			continue
 		}
 
-		info, err := load(entry.Name())
+		info, err := loadInfo(entry.Name())
 		if err != nil {
 			log.Printf("Warning: failed to load container info for %s: %v", entry.Name(), err)
 			continue
@@ -123,6 +123,16 @@ func list(showAll bool) error {
 		fmt.Printf("%-10s %-20s %-15s %-10d %-20s %s\n",
 			info.ID, info.Name, info.Status, info.PID,
 			info.CreatedAt.Format("2006-01-02 15:04:05"), cmd)
+	}
+
+	return nil
+}
+
+// removeInfo deletes container information from disk.
+func removeInfo(id string) error {
+	infoDir := filepath.Join(containersDir, id)
+	if err := os.RemoveAll(infoDir); err != nil {
+		return fmt.Errorf("failed to remove container directory: %w", err)
 	}
 
 	return nil

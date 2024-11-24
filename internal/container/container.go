@@ -21,6 +21,7 @@ import (
 func Create(
 	interactive bool,
 	detached bool,
+	autoRemove bool,
 	name string,
 	memoryLimit string,
 	cpuLimit float64,
@@ -68,15 +69,6 @@ func Create(
 		return fmt.Errorf("failed to setup overlay: %w", err)
 	}
 
-	// TODO: Move cleanups to dedicated removal function
-	if !detached {
-		defer func() {
-			if err := overlay.Cleanup(id, volumes); err != nil {
-				log.Printf("Container %s overlay cleanup error: %v", id, err)
-			}
-		}()
-	}
-
 	// Set merged overlay directory as working directory for container's root filesystem
 	cmd.Dir = mergedDir
 
@@ -105,31 +97,13 @@ func Create(
 		CreatedAt: time.Now(),
 	}
 
-	if err := save(info); err != nil {
+	if err := saveInfo(info); err != nil {
 		return err
-	}
-
-	// Update status of interactive containers upon exit
-	if !detached {
-		defer func() {
-			info.Status = exited
-			if err := save(info); err != nil {
-				log.Printf("Failed to update container status: %v", err)
-			}
-		}()
 	}
 
 	// Initialize cgroup for container
 	if err := cgroups.Create(id); err != nil {
 		return err
-	}
-
-	if !detached {
-		defer func() {
-			if err := cgroups.Remove(id); err != nil {
-				log.Printf("Container %s cgroups cleanup error: %v", id, err)
-			}
-		}()
 	}
 
 	if err := cgroups.AddProcess(id, pid); err != nil {
@@ -158,6 +132,19 @@ func Create(
 		log.Println(id)
 		return nil
 	}
+
+	defer func() {
+		info.Status = exited
+		if err := saveInfo(info); err != nil {
+			log.Print(err)
+		}
+
+		if autoRemove {
+			if err := Remove(id, false); err != nil {
+				log.Print(err)
+			}
+		}
+	}()
 
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("failed to wait for container: %w", err)
@@ -194,7 +181,7 @@ func Run() error {
 
 // List prints all containers, or only running ones if showAll is false.
 func List(showAll bool) error {
-	return list(showAll)
+	return listInfo(showAll)
 }
 
 // Stop sends a signal to specified container and waits for it to terminate.
@@ -202,7 +189,7 @@ func List(showAll bool) error {
 // Interactive containers may not properly handle SIGTERM/SIGINT signals when
 // running in foreground, instead, users should exit them directly.
 func Stop(id, sig string) error {
-	info, err := load(id)
+	info, err := loadInfo(id)
 	if err != nil {
 		return fmt.Errorf("no such container: %w", err)
 	}
@@ -213,7 +200,7 @@ func Stop(id, sig string) error {
 
 	if err := syscall.Kill(info.PID, 0); err != nil || !verifyProcess(info.PID, id) {
 		info.Status = exited
-		if err := save(info); err != nil {
+		if err := saveInfo(info); err != nil {
 			return fmt.Errorf("failed to update container status: %w", err)
 		}
 
@@ -236,7 +223,7 @@ func Stop(id, sig string) error {
 	for i := 0; i < 10; i++ {
 		if err := syscall.Kill(info.PID, 0); err != nil {
 			info.Status = exited
-			if err := save(info); err != nil {
+			if err := saveInfo(info); err != nil {
 				return fmt.Errorf("failed to update container status: %w", err)
 			}
 
@@ -246,6 +233,40 @@ func Stop(id, sig string) error {
 	}
 
 	return fmt.Errorf("container did not stop")
+}
+
+// Remove deletes container resources.
+func Remove(id string, force bool) error {
+	info, err := loadInfo(id)
+	if err != nil {
+		return err
+	}
+
+	if info.Status == running {
+		if force {
+			if err := Stop(id, "SIGKILL"); err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("container is running: stop it before removing")
+		}
+	}
+
+	if err := cgroups.Remove(id); err != nil {
+		return err
+	}
+
+	// TODO: Handle actual volumes removal if specified
+	v := volume.Volumes{}
+	if err := overlay.Cleanup(id, v); err != nil {
+		return err
+	}
+
+	if err := removeInfo(id); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // writeArgsToPipe writes command arguments to write end of a pipe.

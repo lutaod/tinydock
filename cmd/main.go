@@ -32,6 +32,8 @@ func main() {
 
 	detached := runFlagSet.Bool("d", false, "Run container in detached mode")
 
+	autoRemove := runFlagSet.Bool("rm", false, "Automatically remove the container when it exits")
+
 	name := runFlagSet.String("n", "", "Assign a name to container")
 
 	memoryLimit := runFlagSet.String("m", "", "Memory limit (e.g., 100m)")
@@ -55,9 +57,14 @@ func main() {
 				return fmt.Errorf("detached container cannot be interactive")
 			}
 
+			if !*interactive && *autoRemove {
+				return fmt.Errorf("autoremove only works for interactive containers")
+			}
+
 			return container.Create(
 				*interactive,
 				*detached,
+				*autoRemove,
 				*name,
 				*memoryLimit,
 				*cpuLimit,
@@ -100,9 +107,36 @@ func main() {
 			for _, id := range args {
 				if err := container.Stop(id, *sig); err != nil {
 					log.Printf("Error stopping container %s: %v", id, err)
+				} else {
+					log.Println(id)
 				}
+			}
 
-				log.Println(id)
+			return nil
+		},
+	}
+
+	// Definitions related to rm command
+	rmFlagSet := flag.NewFlagSet("rm", flag.ExitOnError)
+
+	force := rmFlagSet.Bool("f", false, "Force the removal of a running container")
+
+	rmCmd := &ffcli.Command{
+		Name:       "rm",
+		ShortUsage: "tinydock rm [flags] CONTAINER",
+		ShortHelp:  "Remove one or more containers",
+		FlagSet:    rmFlagSet,
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) == 0 {
+				return fmt.Errorf("'tinydock rm' requires at least 1 argument")
+			}
+
+			for _, id := range args {
+				if err := container.Remove(id, *force); err != nil {
+					log.Printf("Error removing container %s: %v", id, err)
+				} else {
+					log.Println(id)
+				}
 			}
 
 			return nil
@@ -117,7 +151,7 @@ func main() {
 		ShortHelp:   "tinydock is a minimal implementation of container runtime",
 		ShortUsage:  "tinydock COMMAND",
 		FlagSet:     rootFlagSet,
-		Subcommands: []*ffcli.Command{runCmd, lsCmd, stopCmd},
+		Subcommands: []*ffcli.Command{runCmd, lsCmd, stopCmd, rmCmd},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
 				return flag.ErrHelp
