@@ -95,6 +95,7 @@ func Create(
 		Status:    running,
 		Command:   args,
 		CreatedAt: time.Now(),
+		Volumes:   volumes,
 	}
 
 	if err := saveInfo(info); err != nil {
@@ -256,9 +257,7 @@ func Remove(id string, force bool) error {
 		return err
 	}
 
-	// TODO: Handle actual volumes removal if specified
-	v := volume.Volumes{}
-	if err := overlay.Cleanup(id, v); err != nil {
+	if err := overlay.Cleanup(id, info.Volumes); err != nil {
 		return err
 	}
 

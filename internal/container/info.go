@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/lutaod/tinydock/internal/volume"
 )
 
 const (
@@ -32,12 +34,13 @@ const (
 
 // info stores relevant information of a container.
 type info struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	PID       int       `json:"pid"`
-	Status    status    `json:"status"`
-	Command   []string  `json:"command"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	PID       int            `json:"pid"`
+	Status    status         `json:"status"`
+	Command   []string       `json:"command"`
+	CreatedAt time.Time      `json:"createdAt"`
+	Volumes   volume.Volumes `json:"volumes"`
 }
 
 // generateID creates a random ID for container.
