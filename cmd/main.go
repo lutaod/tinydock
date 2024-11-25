@@ -147,6 +147,25 @@ func main() {
 		},
 	}
 
+	// Definitions related to logs command
+	logsFlagSet := flag.NewFlagSet("logs", flag.ExitOnError)
+
+	follow := logsFlagSet.Bool("f", false, "Follow log output")
+
+	logsCmd := &ffcli.Command{
+		Name:       "logs",
+		ShortUsage: "tinydock logs [-f] CONTAINER",
+		ShortHelp:  "Fetch the logs of a container",
+		FlagSet:    logsFlagSet,
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("'tinydock logs' exactly 1 argument")
+			}
+
+			return container.Logs(args[0], *follow)
+		},
+	}
+
 	// Definitions related to root command
 	rootFlagSet := flag.NewFlagSet(appName, flag.ExitOnError)
 
@@ -155,7 +174,7 @@ func main() {
 		ShortHelp:   "tinydock is a minimal implementation of container runtime",
 		ShortUsage:  "tinydock COMMAND",
 		FlagSet:     rootFlagSet,
-		Subcommands: []*ffcli.Command{runCmd, lsCmd, stopCmd, rmCmd},
+		Subcommands: []*ffcli.Command{runCmd, lsCmd, stopCmd, rmCmd, logsCmd},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
 				return flag.ErrHelp

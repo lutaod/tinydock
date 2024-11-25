@@ -57,14 +57,7 @@ func generateID() string {
 
 // saveInfo persists container information to disk.
 func saveInfo(info *info) error {
-	infoDir := filepath.Join(containersDir, info.ID)
-	if _, err := os.Stat(infoDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(infoDir, 0755); err != nil {
-			return fmt.Errorf("failed to create containers directory: %w", err)
-		}
-	}
-
-	infoPath := filepath.Join(infoDir, infoFile)
+	infoPath := filepath.Join(containersDir, info.ID, infoFile)
 	data, err := json.Marshal(info)
 	if err != nil {
 		return fmt.Errorf("failed to marshal container info: %w", err)

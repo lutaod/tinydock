@@ -1,11 +1,13 @@
 package container
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -54,16 +56,28 @@ func Create(
 		Setpgid: detached,
 	}
 
-	if interactive {
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
-
 	id := generateID()
 
 	if name == "" {
 		name = id
+	}
+
+	if err := createContainerDir(id); err != nil {
+		return err
+	}
+
+	if interactive {
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else {
+		logPath := filepath.Join(containersDir, id, "container.log")
+		logFile, err := os.Create(logPath)
+		if err != nil {
+			return fmt.Errorf("failed to create log file: %w", err)
+		}
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
 	}
 
 	// Initialize overlay filesystem for container
@@ -266,6 +280,72 @@ func Remove(id string, force bool) error {
 
 	if err := removeInfo(id); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// Logs displays container logs.
+func Logs(id string, follow bool) error {
+	info, err := loadInfo(id)
+	if err != nil {
+		return fmt.Errorf("no such container: %w", err)
+	}
+
+	logPath := filepath.Join(containersDir, id, "container.log")
+	if _, err := os.Stat(logPath); err != nil {
+		return fmt.Errorf("no logs for container")
+	}
+
+	if !follow {
+		content, err := os.ReadFile(logPath)
+		if err != nil {
+			return fmt.Errorf("failed to read logs: %w", err)
+		}
+
+		fmt.Print(string(content))
+		return nil
+	}
+
+	file, err := os.Open(logPath)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+	defer file.Close()
+
+	// Seek to end for follow mode
+	if _, err := file.Seek(0, 2); err != nil {
+		return fmt.Errorf("failed to seek log file: %w", err)
+	}
+
+	reader := bufio.NewReader(file)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil && err != io.EOF {
+			return fmt.Errorf("failed to read log: %w", err)
+		}
+
+		if line != "" {
+			fmt.Print(line)
+		}
+
+		if err == io.EOF {
+			if info.Status == exited {
+				return nil
+			}
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+	}
+}
+
+// createContainerDir creates container directory if it doesn't exist.
+func createContainerDir(id string) error {
+	containerDir := filepath.Join(containersDir, id)
+	if _, err := os.Stat(containerDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(containerDir, 0755); err != nil {
+			return fmt.Errorf("failed to create container directory: %w", err)
+		}
 	}
 
 	return nil
