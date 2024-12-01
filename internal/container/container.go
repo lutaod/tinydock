@@ -339,6 +339,43 @@ func Logs(id string, follow bool) error {
 	}
 }
 
+// Exec executes a command in a running container.
+//
+// A new process is forked to enter container namespaces before executing the
+// command due to Linux kernel restrictions on mount namespace transitions in
+// multi-threaded processes.
+func Exec(id string, command []string) error {
+	if os.Getenv("TINYDOCK_PID") != "" {
+		// Second run: C constructor will have handled namespace entry as env
+		// vars are set
+		return nil
+	}
+
+	// First run
+	info, err := loadInfo(id)
+	if err != nil {
+		return fmt.Errorf("no such container: %w", err)
+	}
+
+	if info.Status != running {
+		return fmt.Errorf("container is not running")
+	}
+
+	cmd := exec.Command("/proc/self/exe", append([]string{"exec", id}, command...)...)
+
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Set env vars for C constructor
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("TINYDOCK_PID=%d", info.PID),
+		fmt.Sprintf("TINYDOCK_CMD=%s", strings.Join(command, " ")),
+	)
+
+	return cmd.Run()
+}
+
 // createContainerDir creates container directory if it doesn't exist.
 func createContainerDir(id string) error {
 	containerDir := filepath.Join(containersDir, id)

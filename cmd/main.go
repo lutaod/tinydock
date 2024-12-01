@@ -166,6 +166,20 @@ func main() {
 		},
 	}
 
+	// Definitions related to exec command
+	execCmd := &ffcli.Command{
+		Name:       "exec",
+		ShortUsage: "tinydock exec CONTAINER COMMAND [ARGS...]",
+		ShortHelp:  "Execute a command in a running container",
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) < 2 {
+				return fmt.Errorf("'tinydock exec' at least 2 argument")
+			}
+
+			return container.Exec(args[0], args[1:])
+		},
+	}
+
 	// Definitions related to root command
 	rootFlagSet := flag.NewFlagSet(appName, flag.ExitOnError)
 
@@ -174,7 +188,7 @@ func main() {
 		ShortHelp:   "tinydock is a minimal implementation of container runtime",
 		ShortUsage:  "tinydock COMMAND",
 		FlagSet:     rootFlagSet,
-		Subcommands: []*ffcli.Command{runCmd, lsCmd, stopCmd, rmCmd, logsCmd},
+		Subcommands: []*ffcli.Command{runCmd, lsCmd, stopCmd, rmCmd, logsCmd, execCmd},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
 				return flag.ErrHelp
