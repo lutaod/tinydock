@@ -367,8 +367,13 @@ func Exec(id string, command []string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Set env vars for C constructor
-	cmd.Env = append(os.Environ(),
+	envs, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", info.PID))
+	if err != nil {
+		return fmt.Errorf("failed to read environment variables: %w", err)
+	}
+
+	cmd.Env = append(strings.Split(string(envs), "\x00"),
+		// Set env vars for C constructor
 		fmt.Sprintf("TINYDOCK_PID=%d", info.PID),
 		fmt.Sprintf("TINYDOCK_CMD=%s", strings.Join(command, " ")),
 	)
