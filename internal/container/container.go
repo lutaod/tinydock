@@ -18,9 +18,9 @@ import (
 	"github.com/lutaod/tinydock/internal/volume"
 )
 
-// Create spawns a container process that initially acts as the init process (PID 1)
+// Init spawns a container process that initially acts as the init process (PID 1)
 // before being replaced by user command.
-func Create(
+func Init(
 	interactive bool,
 	autoRemove bool,
 	detached bool,

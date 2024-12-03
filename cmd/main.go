@@ -64,7 +64,7 @@ func main() {
 				return fmt.Errorf("autoremove only works for interactive containers")
 			}
 
-			return container.Create(
+			return container.Init(
 				*interactive,
 				*autoRemove,
 				*detached,
@@ -173,7 +173,7 @@ func main() {
 		ShortHelp:  "Execute a command in a running container",
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) < 2 {
-				return fmt.Errorf("'tinydock exec' at least 2 argument")
+				return fmt.Errorf("'tinydock exec' at least 2 arguments")
 			}
 
 			return container.Exec(args[0], args[1:])
