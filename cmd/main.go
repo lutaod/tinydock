@@ -16,28 +16,52 @@ import (
 const appName = "tinydock"
 
 func main() {
-	// Handle "init" argument, which signals that current process should act as the init process
-	// (PID 1) of container
+	// Handle container init process
 	if len(os.Args) > 1 && os.Args[1] == "init" {
 		if err := container.Run(); err != nil {
 			log.Fatal(err)
 		}
+
 		return
 	}
 
-	// Definitions related to run command
+	root := &ffcli.Command{
+		Name:       appName,
+		ShortHelp:  "tinydock is a minimal implementation of container runtime",
+		ShortUsage: "tinydock COMMAND",
+		FlagSet:    flag.NewFlagSet(appName, flag.ExitOnError),
+		Subcommands: []*ffcli.Command{
+			newRunCmd(),
+			newListCmd(),
+			newStopCmd(),
+			newRemoveCmd(),
+			newLogsCmd(),
+			newExecCmd(),
+			newCommitCmd(),
+		},
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) == 0 {
+				return flag.ErrHelp
+			}
+
+			return fmt.Errorf("'%s' is not a tinydock command.\nSee 'tinydock --help'", args[0])
+		},
+	}
+
+	if err := root.ParseAndRun(context.Background(), os.Args[1:]); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func newRunCmd() *ffcli.Command {
 	runFlagSet := flag.NewFlagSet("run", flag.ExitOnError)
 
 	interactive := runFlagSet.Bool("it", false, "Run container in interactive mode")
-
 	autoRemove := runFlagSet.Bool("rm", false, "Automatically remove the container when it exits")
-
 	detached := runFlagSet.Bool("d", false, "Run container in detached mode")
-
 	name := runFlagSet.String("n", "", "Assign a name to container")
 
 	cpuLimit := runFlagSet.Float64("c", 0, "CPU limit (e.g., 0.5 for 50% of one core)")
-
 	memoryLimit := runFlagSet.String("m", "", "Memory limit (e.g., 100m)")
 
 	var volumes volume.Volumes
@@ -46,10 +70,10 @@ func main() {
 	var envs container.Envs
 	runFlagSet.Var(&envs, "e", "Set environment variables")
 
-	runCmd := &ffcli.Command{
+	return &ffcli.Command{
 		Name:       "run",
 		ShortHelp:  "Create and run a new container",
-		ShortUsage: "tinydock run (-it [-rm] | -d) [-n NAME] [-c CPU]  [-m MEMORY] [-v SRC:DST]... [-e KEY=VALUE]... COMMAND",
+		ShortUsage: "tinydock run (-it [-rm] | -d) [-n NAME] [-c CPU] [-m MEMORY] [-v SRC:DST]... [-e KEY=VALUE]... COMMAND",
 		FlagSet:    runFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -59,46 +83,37 @@ func main() {
 			if *interactive && *detached {
 				return fmt.Errorf("detached container cannot be interactive")
 			}
-
 			if !*interactive && *autoRemove {
 				return fmt.Errorf("autoremove only works for interactive containers")
 			}
 
-			return container.Init(
-				*interactive,
-				*autoRemove,
-				*detached,
-				*name,
-				*cpuLimit,
-				*memoryLimit,
-				volumes,
-				args,
-				envs,
-			)
+			return container.Init(*interactive, *autoRemove, *detached, *name, *cpuLimit, *memoryLimit, volumes, args, envs)
 		},
 	}
+}
 
-	// Definitions related to ls command
-	lsFlagSet := flag.NewFlagSet("ls", flag.ExitOnError)
+func newListCmd() *ffcli.Command {
+	listFlagSet := flag.NewFlagSet("ls", flag.ExitOnError)
 
-	showAll := lsFlagSet.Bool("a", false, "Show all containers (default shows just running)")
+	showAll := listFlagSet.Bool("a", false, "Show all containers (default shows running)")
 
-	lsCmd := &ffcli.Command{
+	return &ffcli.Command{
 		Name:       "ls",
 		ShortUsage: "tinydock ls [-a]",
 		ShortHelp:  "List containers",
-		FlagSet:    lsFlagSet,
+		FlagSet:    listFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
 			return container.List(*showAll)
 		},
 	}
+}
 
-	// Definitions related to stop command
+func newStopCmd() *ffcli.Command {
 	stopFlagSet := flag.NewFlagSet("stop", flag.ExitOnError)
 
 	sig := stopFlagSet.String("s", "", "Signal to send to the container")
 
-	stopCmd := &ffcli.Command{
+	return &ffcli.Command{
 		Name:       "stop",
 		ShortUsage: "tinydock stop [-s SIGNAL] CONTAINER",
 		ShortHelp:  "Stop one or more containers",
@@ -111,25 +126,26 @@ func main() {
 			for _, id := range args {
 				if err := container.Stop(id, *sig); err != nil {
 					log.Printf("Error stopping container %s: %v", id, err)
-				} else {
-					log.Println(id)
+					continue
 				}
+				log.Println(id)
 			}
 
 			return nil
 		},
 	}
+}
 
-	// Definitions related to rm command
-	rmFlagSet := flag.NewFlagSet("rm", flag.ExitOnError)
+func newRemoveCmd() *ffcli.Command {
+	removeFlagSet := flag.NewFlagSet("rm", flag.ExitOnError)
 
-	force := rmFlagSet.Bool("f", false, "Force the removal of a running container")
+	force := removeFlagSet.Bool("f", false, "Force the removal of a running container")
 
-	rmCmd := &ffcli.Command{
+	return &ffcli.Command{
 		Name:       "rm",
 		ShortUsage: "tinydock rm [-f] CONTAINER",
 		ShortHelp:  "Remove one or more containers",
-		FlagSet:    rmFlagSet,
+		FlagSet:    removeFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
 				return fmt.Errorf("'tinydock rm' requires at least 1 argument")
@@ -138,81 +154,62 @@ func main() {
 			for _, id := range args {
 				if err := container.Remove(id, *force); err != nil {
 					log.Printf("Error removing container %s: %v", id, err)
-				} else {
-					log.Println(id)
+					continue
 				}
+				log.Println(id)
 			}
 
 			return nil
 		},
 	}
+}
 
-	// Definitions related to logs command
+func newLogsCmd() *ffcli.Command {
 	logsFlagSet := flag.NewFlagSet("logs", flag.ExitOnError)
 
 	follow := logsFlagSet.Bool("f", false, "Follow log output")
 
-	logsCmd := &ffcli.Command{
+	return &ffcli.Command{
 		Name:       "logs",
 		ShortUsage: "tinydock logs [-f] CONTAINER",
 		ShortHelp:  "Fetch the logs of a container",
 		FlagSet:    logsFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("'tinydock logs' exactly 1 argument")
+				return fmt.Errorf("'tinydock logs' requires exactly 1 argument")
 			}
 
 			return container.Logs(args[0], *follow)
 		},
 	}
+}
 
-	// Definitions related to exec command
-	execCmd := &ffcli.Command{
+func newExecCmd() *ffcli.Command {
+	return &ffcli.Command{
 		Name:       "exec",
 		ShortUsage: "tinydock exec CONTAINER COMMAND [ARGS...]",
 		ShortHelp:  "Execute a command in a running container",
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) < 2 {
-				return fmt.Errorf("'tinydock exec' at least 2 arguments")
+				return fmt.Errorf("'tinydock exec' requires at least 2 arguments")
 			}
 
 			return container.Exec(args[0], args[1:])
 		},
 	}
+}
 
-	// Definitions related to commit command
-	commitCmd := &ffcli.Command{
+func newCommitCmd() *ffcli.Command {
+	return &ffcli.Command{
 		Name:       "commit",
 		ShortUsage: "tinydock commit CONTAINER NAME",
 		ShortHelp:  "Create a new image from a container's changes",
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) != 2 {
-				return fmt.Errorf("'tinydock commit' exactly 2 arguments")
+				return fmt.Errorf("'tinydock commit' requires exactly 2 arguments")
 			}
 
 			return container.Commit(args[0], args[1])
 		},
-	}
-
-	// Definitions related to root command
-	rootFlagSet := flag.NewFlagSet(appName, flag.ExitOnError)
-
-	root := &ffcli.Command{
-		Name:        appName,
-		ShortHelp:   "tinydock is a minimal implementation of container runtime",
-		ShortUsage:  "tinydock COMMAND",
-		FlagSet:     rootFlagSet,
-		Subcommands: []*ffcli.Command{runCmd, lsCmd, stopCmd, rmCmd, logsCmd, execCmd, commitCmd},
-		Exec: func(ctx context.Context, args []string) error {
-			if len(args) == 0 {
-				return flag.ErrHelp
-			}
-
-			return fmt.Errorf("'%s' is not a tinydock command.\nSee 'tinydock --help'", args[0])
-		},
-	}
-
-	if err := root.ParseAndRun(context.Background(), os.Args[1:]); err != nil {
-		log.Fatal(err)
 	}
 }
