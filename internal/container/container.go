@@ -209,7 +209,7 @@ func List(showAll bool) error {
 func Stop(id, sig string) error {
 	info, err := loadInfo(id)
 	if err != nil {
-		return fmt.Errorf("no such container: %w", err)
+		return fmt.Errorf("error loading container %s: %w", id, err)
 	}
 
 	if info.Status == exited {
@@ -289,7 +289,7 @@ func Remove(id string, force bool) error {
 func Logs(id string, follow bool) error {
 	info, err := loadInfo(id)
 	if err != nil {
-		return fmt.Errorf("no such container: %w", err)
+		return fmt.Errorf("error loading container %s: %w", id, err)
 	}
 
 	logPath := filepath.Join(containersDir, id, "container.log")
@@ -354,7 +354,7 @@ func Exec(id string, command []string) error {
 	// First run
 	info, err := loadInfo(id)
 	if err != nil {
-		return fmt.Errorf("no such container: %w", err)
+		return fmt.Errorf("error loading container %s: %w", id, err)
 	}
 
 	if info.Status != running {
@@ -385,7 +385,7 @@ func Exec(id string, command []string) error {
 func Commit(id, name string) error {
 	_, err := loadInfo(id)
 	if err != nil {
-		return fmt.Errorf("no such container: %w", err)
+		return fmt.Errorf("error loading container %s: %w", id, err)
 	}
 
 	if err := overlay.SaveImage(id, name); err != nil {
