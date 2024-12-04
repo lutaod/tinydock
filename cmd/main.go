@@ -180,6 +180,20 @@ func main() {
 		},
 	}
 
+	// Definitions related to commit command
+	commitCmd := &ffcli.Command{
+		Name:       "commit",
+		ShortUsage: "tinydock commit CONTAINER NAME",
+		ShortHelp:  "Create a new image from a container's changes",
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) != 2 {
+				return fmt.Errorf("'tinydock commit' exactly 2 arguments")
+			}
+
+			return container.Commit(args[0], args[1])
+		},
+	}
+
 	// Definitions related to root command
 	rootFlagSet := flag.NewFlagSet(appName, flag.ExitOnError)
 
@@ -188,7 +202,7 @@ func main() {
 		ShortHelp:   "tinydock is a minimal implementation of container runtime",
 		ShortUsage:  "tinydock COMMAND",
 		FlagSet:     rootFlagSet,
-		Subcommands: []*ffcli.Command{runCmd, lsCmd, stopCmd, rmCmd, logsCmd, execCmd},
+		Subcommands: []*ffcli.Command{runCmd, lsCmd, stopCmd, rmCmd, logsCmd, execCmd, commitCmd},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
 				return flag.ErrHelp

@@ -381,6 +381,20 @@ func Exec(id string, command []string) error {
 	return cmd.Run()
 }
 
+// Commit creates a new image from a container's filesystem.
+func Commit(id, name string) error {
+	_, err := loadInfo(id)
+	if err != nil {
+		return fmt.Errorf("no such container: %w", err)
+	}
+
+	if err := overlay.SaveImage(id, name); err != nil {
+		return fmt.Errorf("failed to commit container: %w", err)
+	}
+
+	return nil
+}
+
 // createContainerDir creates container directory if it doesn't exist.
 func createContainerDir(id string) error {
 	containerDir := filepath.Join(containersDir, id)

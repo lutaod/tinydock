@@ -74,6 +74,26 @@ func Setup(containerID string, volumes volume.Volumes) (string, error) {
 	return paths[mergedDir], nil
 }
 
+// SaveImage creates a new image from a container's merged directory.
+func SaveImage(containerID, imageName string) error {
+	imagePath := filepath.Join(tinydockRoot, imageDir, imageName)
+	if _, err := os.Stat(imagePath); err == nil {
+		return fmt.Errorf("image '%s' already exists", imageName)
+	}
+
+	mergedPath := filepath.Join(tinydockRoot, overlayDir, containerID, mergedDir)
+	if _, err := os.Stat(mergedPath); err != nil {
+		return fmt.Errorf("container filesystem not found: %w", err)
+	}
+
+	if err := copyDir(mergedPath, imagePath); err != nil {
+		os.RemoveAll(imagePath)
+		return fmt.Errorf("failed to save filesystem: %w", err)
+	}
+
+	return nil
+}
+
 // Cleanup unmounts any volumes and removes all overlay filesystem resources for a container.
 func Cleanup(containerID string, volumes volume.Volumes) error {
 	mergedPath := filepath.Join(tinydockRoot, overlayDir, containerID, mergedDir)
@@ -134,4 +154,14 @@ func extractBaseImage() (string, error) {
 	}
 
 	return baseImageDir, nil
+}
+
+// copyDir copies the contents of src directory to dst directory.
+func copyDir(src, dst string) error {
+	cmd := exec.Command("cp", "-r", src+"/.", dst)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("copy failed: %s", output)
+	}
+
+	return nil
 }
