@@ -102,6 +102,10 @@ func newListCmd() *ffcli.Command {
 		ShortHelp:  "List containers",
 		FlagSet:    listFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
+			if len(args) != 0 {
+				return fmt.Errorf("'tinydock ls' accepts no arguments")
+			}
+
 			return container.List(*showAll)
 		},
 	}
