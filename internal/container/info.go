@@ -35,7 +35,6 @@ const (
 // info stores relevant information of a container.
 type info struct {
 	ID        string         `json:"id"`
-	Name      string         `json:"name"`
 	PID       int            `json:"pid"`
 	Status    status         `json:"status"`
 	Command   []string       `json:"command"`
@@ -93,8 +92,7 @@ func listInfo(showAll bool) error {
 		return fmt.Errorf("failed to read containers directory: %w", err)
 	}
 
-	fmt.Printf("%-10s %-20s %-15s %-10s %-20s %s\n",
-		"ID", "NAME", "STATUS", "PID", "CREATED", "COMMAND")
+	fmt.Printf("%-10s %-15s %-10s %-20s %s\n", "ID", "STATUS", "PID", "CREATED", "COMMAND")
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -116,8 +114,8 @@ func listInfo(showAll bool) error {
 			cmd = cmd[:truncatedPrintCmdLength] + "..."
 		}
 
-		fmt.Printf("%-10s %-20s %-15s %-10d %-20s %s\n",
-			info.ID, info.Name, info.Status, info.PID,
+		fmt.Printf("%-10s %-15s %-10d %-20s %s\n",
+			info.ID, info.Status, info.PID,
 			info.CreatedAt.Format("2006-01-02 15:04:05"), cmd)
 	}
 

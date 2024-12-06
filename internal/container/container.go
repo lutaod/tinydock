@@ -24,7 +24,6 @@ func Init(
 	interactive bool,
 	autoRemove bool,
 	detached bool,
-	name string,
 	cpuLimit float64,
 	memoryLimit string,
 	volumes volume.Volumes,
@@ -57,10 +56,6 @@ func Init(
 	}
 
 	id := generateID()
-
-	if name == "" {
-		name = id
-	}
 
 	if err := createContainerDir(id); err != nil {
 		return err
@@ -107,7 +102,6 @@ func Init(
 	// Record container information locally
 	info := &info{
 		ID:        id,
-		Name:      name,
 		PID:       pid,
 		Status:    running,
 		Command:   args,
