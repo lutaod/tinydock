@@ -2,7 +2,6 @@ package network
 
 import (
 	"fmt"
-	"math/rand"
 	"net"
 
 	"github.com/vishvananda/netlink"
@@ -13,13 +12,15 @@ type Driver interface {
 	create(name string, subnet *net.IPNet) (*Network, error)
 
 	// delete tears down network infrastructure for given network.
-	// TODO: delete(nw *Network) error
+	delete(nw *Network) error
 }
 
 type BridgeDriver struct{}
 
+const bridgePrefix = "br-"
+
 func (bd *BridgeDriver) create(name string, subnet *net.IPNet) (*Network, error) {
-	bridgeName := fmt.Sprintf("br-%05x", rand.Intn(0x100000))
+	bridgeName := bridgePrefix + name
 
 	linkAttrs := netlink.NewLinkAttrs()
 	linkAttrs.Name = bridgeName
@@ -45,4 +46,19 @@ func (bd *BridgeDriver) create(name string, subnet *net.IPNet) (*Network, error)
 		Subnet: subnet,
 		Driver: "bridge",
 	}, nil
+}
+
+func (bd *BridgeDriver) delete(nw *Network) error {
+	bridgeName := bridgePrefix + nw.Name
+
+	link, err := netlink.LinkByName(bridgeName)
+	if err != nil {
+		return fmt.Errorf("failed to find bridge: %w", err)
+	}
+
+	if err := netlink.LinkDel(link); err != nil {
+		return fmt.Errorf("failed to delete bridge: %w", err)
+	}
+
+	return nil
 }

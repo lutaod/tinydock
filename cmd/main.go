@@ -226,6 +226,7 @@ func newNetworkCmd() *ffcli.Command {
 		ShortHelp:  "Manage networks",
 		Subcommands: []*ffcli.Command{
 			newNetworkCreateCmd(),
+			newNetworkRemoveCmd(),
 		},
 		Exec: func(context.Context, []string) error {
 			return flag.ErrHelp
@@ -250,6 +251,29 @@ func newNetworkCreateCmd() *ffcli.Command {
 			}
 
 			return network.Create(args[0], *driver, *subnet)
+		},
+	}
+}
+
+func newNetworkRemoveCmd() *ffcli.Command {
+	return &ffcli.Command{
+		Name:       "rm",
+		ShortUsage: "tinydock network rm NETWORK [NETWORK...]",
+		ShortHelp:  "Remove one or more networks",
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("'tinydock network rm' requires at least 1 argument")
+			}
+
+			for _, name := range args {
+				if err := network.Remove(name); err != nil {
+					log.Printf("Error removing network: %v", err)
+					continue
+				}
+				log.Println(name)
+			}
+
+			return nil
 		},
 	}
 }

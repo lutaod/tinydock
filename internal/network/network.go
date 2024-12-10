@@ -46,6 +46,25 @@ func Create(name, driver, subnet string) error {
 	return save(nw)
 }
 
+// Remove tears down network infrastructure specified by given name.
+func Remove(name string) error {
+	nw, err := load(name)
+	if err != nil {
+		return err
+	}
+
+	d, ok := drivers[nw.Driver]
+	if !ok {
+		return fmt.Errorf("unsupported driver: %s", nw.Driver)
+	}
+
+	if err := d.delete(nw); err != nil {
+		return err
+	}
+
+	return os.Remove(filepath.Join(networkDir, name+".json"))
+}
+
 // saveInfo persists network information to disk.
 func save(nw *Network) error {
 	if err := os.MkdirAll(networkDir, 0755); err != nil {
@@ -63,4 +82,24 @@ func save(nw *Network) error {
 	}
 
 	return nil
+}
+
+// load retrieves network information from disk by name.
+func load(name string) (*Network, error) {
+	path := filepath.Join(networkDir, name+".json")
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("network %s not found", name)
+		}
+		return nil, fmt.Errorf("failed to read network file: %w", err)
+	}
+
+	var nw Network
+	if err := json.Unmarshal(data, &nw); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal network info: %w", err)
+	}
+
+	return &nw, nil
 }
