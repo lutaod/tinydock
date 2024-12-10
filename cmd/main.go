@@ -74,7 +74,7 @@ func newRunCmd() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "run",
 		ShortHelp:  "Create and run a new container",
-		ShortUsage: "tinydock run (-it [-rm] | -d) [-c CPU] [-m MEMORY] [-v SRC:DST]... [-e KEY=VALUE]... COMMAND",
+		ShortUsage: "tinydock run (-it [-rm] | -d) [-c CPU] [-m MEMORY] [-v SRC:DST]... [-e KEY=VALUE]... COMMAND [ARG...]",
 		FlagSet:    runFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -120,7 +120,7 @@ func newStopCmd() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "stop",
-		ShortUsage: "tinydock stop [-s SIGNAL] CONTAINER",
+		ShortUsage: "tinydock stop [-s SIGNAL] CONTAINER [CONTAINER...]",
 		ShortHelp:  "Stop one or more containers",
 		FlagSet:    stopFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
@@ -148,7 +148,7 @@ func newRemoveCmd() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "rm",
-		ShortUsage: "tinydock rm [-f] CONTAINER",
+		ShortUsage: "tinydock rm [-f] CONTAINER [CONTAINER...]",
 		ShortHelp:  "Remove one or more containers",
 		FlagSet:    removeFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
@@ -192,7 +192,7 @@ func newLogsCmd() *ffcli.Command {
 func newExecCmd() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "exec",
-		ShortUsage: "tinydock exec CONTAINER COMMAND [ARGS...]",
+		ShortUsage: "tinydock exec CONTAINER COMMAND [ARG...]",
 		ShortHelp:  "Execute a command in a running container",
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) < 2 {
