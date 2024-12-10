@@ -10,6 +10,7 @@ import (
 	"github.com/peterbourgon/ff/v3/ffcli"
 
 	"github.com/lutaod/tinydock/internal/container"
+	"github.com/lutaod/tinydock/internal/network"
 	"github.com/lutaod/tinydock/internal/volume"
 )
 
@@ -38,6 +39,7 @@ func main() {
 			newLogsCmd(),
 			newExecCmd(),
 			newCommitCmd(),
+			newNetworkCmd(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -213,6 +215,41 @@ func newCommitCmd() *ffcli.Command {
 			}
 
 			return container.Commit(args[0], args[1])
+		},
+	}
+}
+
+func newNetworkCmd() *ffcli.Command {
+	return &ffcli.Command{
+		Name:       "network",
+		ShortUsage: "tinydock network COMMAND",
+		ShortHelp:  "Manage networks",
+		Subcommands: []*ffcli.Command{
+			newNetworkCreateCmd(),
+		},
+		Exec: func(context.Context, []string) error {
+			return flag.ErrHelp
+		},
+	}
+}
+
+func newNetworkCreateCmd() *ffcli.Command {
+	networkCreateFlagSet := flag.NewFlagSet("network create", flag.ExitOnError)
+
+	driver := networkCreateFlagSet.String("driver", "bridge", "Driver to manage the Network")
+	subnet := networkCreateFlagSet.String("subnet", "", "Subnet in CIDR format")
+
+	return &ffcli.Command{
+		Name:       "create",
+		ShortUsage: "tinydock network create [-driver DRIVER] [-subnet SUBNET] NETWORK",
+		ShortHelp:  "Create a network",
+		FlagSet:    networkCreateFlagSet,
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("'tinydock network create' requires exactly 1 argument")
+			}
+
+			return network.Create(args[0], *driver, *subnet)
 		},
 	}
 }
