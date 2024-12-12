@@ -19,7 +19,7 @@ type BridgeDriver struct{}
 
 const bridgePrefix = "br-"
 
-func (bd *BridgeDriver) create(name string, subnet *net.IPNet) (*Network, error) {
+func (d *BridgeDriver) create(name string, subnet *net.IPNet) (*Network, error) {
 	bridgeName := bridgePrefix + name
 
 	linkAttrs := netlink.NewLinkAttrs()
@@ -31,7 +31,10 @@ func (bd *BridgeDriver) create(name string, subnet *net.IPNet) (*Network, error)
 	}
 
 	addr := &netlink.Addr{
-		IPNet: subnet,
+		IPNet: &net.IPNet{
+			IP:   net.ParseIP(subnet.IP.String()),
+			Mask: subnet.Mask,
+		},
 	}
 	if err := netlink.AddrAdd(bridge, addr); err != nil {
 		return nil, fmt.Errorf("failed to set bridge IP: %w", err)
@@ -48,7 +51,7 @@ func (bd *BridgeDriver) create(name string, subnet *net.IPNet) (*Network, error)
 	}, nil
 }
 
-func (bd *BridgeDriver) delete(nw *Network) error {
+func (d *BridgeDriver) delete(nw *Network) error {
 	bridgeName := bridgePrefix + nw.Name
 
 	link, err := netlink.LinkByName(bridgeName)

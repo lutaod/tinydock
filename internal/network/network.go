@@ -3,6 +3,7 @@ package network
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -23,6 +24,17 @@ var drivers = map[string]Driver{
 	"bridge": &BridgeDriver{},
 }
 
+var allocator *ipAllocator
+
+// init initializes global IP allocator during package load.
+func init() {
+	var err error
+	allocator, err = newIPAllocator()
+	if err != nil {
+		panic(err)
+	}
+}
+
 // Create sets up and saves a network with given name, driver, and subnet.
 func Create(name, driver, subnet string) error {
 	d, ok := drivers[driver]
@@ -35,11 +47,20 @@ func Create(name, driver, subnet string) error {
 	}
 	_, ipNet, err := net.ParseCIDR(subnet)
 	if err != nil {
-		return fmt.Errorf("invalid subnet format: %w", err)
+		return err
 	}
+
+	gatewayIP, err := allocator.requestIP(ipNet)
+	if err != nil {
+		return err
+	}
+	ipNet.IP = gatewayIP
 
 	nw, err := d.create(name, ipNet)
 	if err != nil {
+		if releaseErr := allocator.releasePrefix(ipNet); releaseErr != nil {
+			log.Printf("failed to release IP after failed network creation: %v", releaseErr)
+		}
 		return err
 	}
 
@@ -62,10 +83,14 @@ func Remove(name string) error {
 		return err
 	}
 
+	if err := allocator.releasePrefix(nw.Subnet); err != nil {
+		return err
+	}
+
 	return os.Remove(filepath.Join(networkDir, name+".json"))
 }
 
-// saveInfo persists network information to disk.
+// save persists network information to disk.
 func save(nw *Network) error {
 	if err := os.MkdirAll(networkDir, 0755); err != nil {
 		return fmt.Errorf("failed to create network directory: %w", err)
