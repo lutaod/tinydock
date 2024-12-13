@@ -227,6 +227,7 @@ func newNetworkCmd() *ffcli.Command {
 		Subcommands: []*ffcli.Command{
 			newNetworkCreateCmd(),
 			newNetworkRemoveCmd(),
+			newNetworkLsCmd(),
 		},
 		Exec: func(context.Context, []string) error {
 			return flag.ErrHelp
@@ -274,6 +275,21 @@ func newNetworkRemoveCmd() *ffcli.Command {
 			}
 
 			return nil
+		},
+	}
+}
+
+func newNetworkLsCmd() *ffcli.Command {
+	return &ffcli.Command{
+		Name:       "ls",
+		ShortUsage: "tinydock network ls",
+		ShortHelp:  "List networks",
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) > 1 {
+				return fmt.Errorf("'tinydock network ls' accepts no arguments")
+			}
+
+			return network.List()
 		},
 	}
 }

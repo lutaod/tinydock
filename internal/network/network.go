@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Network struct {
@@ -90,6 +91,26 @@ func Remove(name string) error {
 	return os.Remove(filepath.Join(networkDir, name+".json"))
 }
 
+// List displays all configured networks.
+func List() error {
+	networks, err := loadAll()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%-15s %-10s %s\n", "NAME", "DRIVER", "SUBNET")
+
+	for _, nw := range networks {
+		fmt.Printf("%-15s %-10s %s\n",
+			nw.Name,
+			nw.Driver,
+			nw.Subnet.String(),
+		)
+	}
+
+	return nil
+}
+
 // save persists network information to disk.
 func save(nw *Network) error {
 	if err := os.MkdirAll(networkDir, 0755); err != nil {
@@ -127,4 +148,28 @@ func load(name string) (*Network, error) {
 	}
 
 	return &nw, nil
+}
+
+// loadAll retrieves all network information from disk.
+func loadAll() ([]*Network, error) {
+	files, err := os.ReadDir(networkDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read network directory: %w", err)
+	}
+
+	var networks []*Network
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".json") {
+			continue
+		}
+
+		name := strings.TrimSuffix(f.Name(), ".json")
+		nw, err := load(name)
+		if err != nil {
+			return nil, err
+		}
+		networks = append(networks, nw)
+	}
+
+	return networks, nil
 }
