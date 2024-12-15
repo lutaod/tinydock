@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lutaod/tinydock/internal/cgroups"
+	"github.com/lutaod/tinydock/internal/network"
 	"github.com/lutaod/tinydock/internal/overlay"
 	"github.com/lutaod/tinydock/internal/volume"
 )
@@ -26,6 +27,7 @@ func Init(
 	detached bool,
 	cpuLimit float64,
 	memoryLimit string,
+	nw string,
 	volumes volume.Volumes,
 	args []string,
 	envs Envs,
@@ -99,7 +101,6 @@ func Init(
 	pid := cmd.Process.Pid
 	log.Printf("Container process started with PID %d", cmd.Process.Pid)
 
-	// Record container information locally
 	info := &info{
 		ID:        id,
 		PID:       pid,
@@ -107,6 +108,20 @@ func Init(
 		Command:   args,
 		CreatedAt: time.Now(),
 		Volumes:   volumes,
+	}
+
+	if nw != "" {
+		config := network.ConnectConfig{
+			Network: nw,
+			ID:      info.ID,
+			PID:     info.PID,
+		}
+
+		endpoint, err := network.Connect(config)
+		if err != nil {
+			return err
+		}
+		info.Endpoint = *endpoint
 	}
 
 	if err := saveInfo(info); err != nil {

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lutaod/tinydock/internal/network"
 	"github.com/lutaod/tinydock/internal/volume"
 )
 
@@ -34,12 +35,13 @@ const (
 
 // info stores relevant information of a container.
 type info struct {
-	ID        string         `json:"id"`
-	PID       int            `json:"pid"`
-	Status    status         `json:"status"`
-	Command   []string       `json:"command"`
-	CreatedAt time.Time      `json:"createdAt"`
-	Volumes   volume.Volumes `json:"volumes"`
+	ID        string           `json:"id"`
+	PID       int              `json:"pid"`
+	Status    status           `json:"status"`
+	Command   []string         `json:"command"`
+	CreatedAt time.Time        `json:"createdAt"`
+	Volumes   volume.Volumes   `json:"volumes"`
+	Endpoint  network.Endpoint `json:"endpoint"`
 }
 
 // generateID creates a random ID for container.

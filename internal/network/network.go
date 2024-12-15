@@ -10,12 +10,6 @@ import (
 	"strings"
 )
 
-type Network struct {
-	Name   string     `json:"name"`
-	Subnet *net.IPNet `json:"subnet"`
-	Driver string     `json:"driver"`
-}
-
 const (
 	defaultSubnet = "172.26.0.0/16"
 	networkDir    = "/var/lib/tinydock/network"
@@ -26,6 +20,26 @@ var drivers = map[string]Driver{
 }
 
 var allocator *ipAllocator
+
+// Network represents network configuration.
+type Network struct {
+	Name   string     `json:"name"`
+	Subnet *net.IPNet `json:"subnet"`
+	Driver string     `json:"driver"`
+}
+
+// Endpoint represents network endpoint configuration for single container.
+type Endpoint struct {
+	IPNet *net.IPNet `json:"ipnet"`
+	// TODO: Add port mapping
+}
+
+// ConnectConfig provides required parameters for connecting container to network.
+type ConnectConfig struct {
+	Network string
+	ID      string
+	PID     int
+}
 
 // init initializes global IP allocator during package load.
 func init() {
@@ -51,11 +65,11 @@ func Create(name, driver, subnet string) error {
 		return err
 	}
 
-	gatewayIP, err := allocator.requestIP(ipNet)
+	gatewayIPNet, err := allocator.requestIP(ipNet, true)
 	if err != nil {
 		return err
 	}
-	ipNet.IP = gatewayIP
+	ipNet.IP = gatewayIPNet.IP
 
 	nw, err := d.create(name, ipNet)
 	if err != nil {
@@ -109,6 +123,35 @@ func List() error {
 	}
 
 	return nil
+}
+
+func Connect(config ConnectConfig) (*Endpoint, error) {
+	nw, err := load(config.Network)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load network: %w", err)
+	}
+
+	ipNet, err := allocator.requestIP(nw.Subnet, false)
+	if err != nil {
+		return nil, err
+	}
+
+	ep := &Endpoint{
+		IPNet: ipNet,
+	}
+
+	d, ok := drivers[nw.Driver]
+	if !ok {
+		// TODO: release IP
+		return nil, fmt.Errorf("driver not found: %s", nw.Driver)
+	}
+
+	if err := d.connect(nw, ep, config.PID); err != nil {
+		// TODO: release IP
+		return nil, err
+	}
+
+	return ep, nil
 }
 
 // save persists network information to disk.

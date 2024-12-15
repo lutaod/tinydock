@@ -65,6 +65,8 @@ func newRunCmd() *ffcli.Command {
 	cpuLimit := runFlagSet.Float64("c", 0, "CPU limit (e.g., 0.5 for 50% of one core)")
 	memoryLimit := runFlagSet.String("m", "", "Memory limit (e.g., 100m)")
 
+	nw := runFlagSet.String("network", "", "Connect a container to a network")
+
 	var volumes volume.Volumes
 	runFlagSet.Var(&volumes, "v", "Bind mount a volume (e.g., /host:/container)")
 
@@ -74,7 +76,7 @@ func newRunCmd() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "run",
 		ShortHelp:  "Create and run a new container",
-		ShortUsage: "tinydock run (-it [-rm] | -d) [-c CPU] [-m MEMORY] [-v SRC:DST]... [-e KEY=VALUE]... COMMAND [ARG...]",
+		ShortUsage: "tinydock run (-it [-rm] | -d) [-c CPU] [-m MEMORY] [-network NETWORK] [-v SRC:DST]... [-e KEY=VALUE]... COMMAND [ARG...]",
 		FlagSet:    runFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -88,7 +90,7 @@ func newRunCmd() *ffcli.Command {
 				return fmt.Errorf("autoremove only works for interactive containers")
 			}
 
-			return container.Init(*interactive, *autoRemove, *detached, *cpuLimit, *memoryLimit, volumes, args, envs)
+			return container.Init(*interactive, *autoRemove, *detached, *cpuLimit, *memoryLimit, *nw, volumes, args, envs)
 		},
 	}
 }
