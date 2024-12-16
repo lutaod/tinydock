@@ -253,7 +253,12 @@ func newNetworkCreateCmd() *ffcli.Command {
 				return fmt.Errorf("'tinydock network create' requires exactly 1 argument")
 			}
 
-			return network.Create(args[0], *driver, *subnet)
+			if err := network.Create(args[0], *driver, *subnet); err != nil {
+				return err
+			}
+			log.Println(args[0])
+
+			return nil
 		},
 	}
 }
