@@ -29,6 +29,9 @@ type Network struct {
 }
 
 // Endpoint represents network endpoint configuration for single container.
+//
+// NOTE: No need to keep track of devices as kernel automatically cleans up veth devices
+// when container exits.
 type Endpoint struct {
 	IPNet *net.IPNet `json:"ipnet"`
 	// TODO: Add port mapping
@@ -94,11 +97,11 @@ func Remove(name string) error {
 		return fmt.Errorf("unsupported driver: %s", nw.Driver)
 	}
 
-	if err := d.delete(nw); err != nil {
+	if err := allocator.releasePrefix(nw.Subnet); err != nil {
 		return err
 	}
 
-	if err := allocator.releasePrefix(nw.Subnet); err != nil {
+	if err := d.delete(nw); err != nil {
 		return err
 	}
 
@@ -125,10 +128,16 @@ func List() error {
 	return nil
 }
 
+// Connect creates a new network endpoint between network and container specified by given config.
 func Connect(config ConnectConfig) (*Endpoint, error) {
 	nw, err := load(config.Network)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load network: %w", err)
+	}
+
+	d, ok := drivers[nw.Driver]
+	if !ok {
+		return nil, fmt.Errorf("driver not found: %s", nw.Driver)
 	}
 
 	ipNet, err := allocator.requestIP(nw.Subnet, false)
@@ -140,18 +149,19 @@ func Connect(config ConnectConfig) (*Endpoint, error) {
 		IPNet: ipNet,
 	}
 
-	d, ok := drivers[nw.Driver]
-	if !ok {
-		// TODO: release IP
-		return nil, fmt.Errorf("driver not found: %s", nw.Driver)
-	}
-
 	if err := d.connect(nw, ep, config.PID); err != nil {
-		// TODO: release IP
+		if releaseErr := allocator.releaseIP(ep.IPNet); releaseErr != nil {
+			log.Printf("Error release IP %s: %v", ep.IPNet.String(), releaseErr)
+		}
 		return nil, err
 	}
 
 	return ep, nil
+}
+
+// Disconnect removes network endpoint and releases its resources.
+func Disconnect(ep *Endpoint) error {
+	return allocator.releaseIP(ep.IPNet)
 }
 
 // save persists network information to disk.

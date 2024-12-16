@@ -287,6 +287,12 @@ func Remove(id string, force bool) error {
 		return err
 	}
 
+	if info.Endpoint.IPNet != nil {
+		if err := network.Disconnect(&info.Endpoint); err != nil {
+			return err
+		}
+	}
+
 	if err := removeInfo(id); err != nil {
 		return err
 	}

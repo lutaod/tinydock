@@ -71,15 +71,32 @@ func (a *ipAllocator) requestIP(subnet *net.IPNet, allowCreate bool) (*net.IPNet
 	}, nil
 }
 
-// releasePrefix releases a subnet and all its allocated IPs.
+// releaseIP releases the IP address specified by ipNet.
+func (a *ipAllocator) releaseIP(ipNet *net.IPNet) error {
+	ctx := context.Background()
+
+	if err := a.ipamer.ReleaseIPFromPrefix(ctx, ipNet.String(), ipNet.IP.String()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// releasePrefix releases a subnet. If any IP is still allocated, the operation would fail.
 func (a *ipAllocator) releasePrefix(subnet *net.IPNet) error {
 	ctx := context.Background()
 
-	if err := a.ipamer.ReleaseIPFromPrefix(ctx, subnet.String(), subnet.IP.String()); err != nil {
+	if err := a.releaseIP(subnet); err != nil {
 		return err
 	}
 
 	if _, err := a.ipamer.DeletePrefix(ctx, subnet.String()); err != nil {
+		// Prefix deletion failed due to other IP in use, neeed to reclaim bridge IP
+		bridgeIP := subnet.IP.String()
+		_, reclaimErr := a.ipamer.AcquireSpecificIP(ctx, subnet.String(), bridgeIP)
+		if reclaimErr != nil {
+			return fmt.Errorf("bridge IP reclaim failed: %v", reclaimErr)
+		}
 		return err
 	}
 
