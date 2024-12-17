@@ -8,6 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netns"
 )
 
 const (
@@ -35,13 +38,6 @@ type Network struct {
 type Endpoint struct {
 	IPNet *net.IPNet `json:"ipnet"`
 	// TODO: Add port mapping
-}
-
-// ConnectConfig provides required parameters for connecting container to network.
-type ConnectConfig struct {
-	Network string
-	ID      string
-	PID     int
 }
 
 // init initializes global IP allocator during package load.
@@ -128,9 +124,9 @@ func List() error {
 	return nil
 }
 
-// Connect creates a new network endpoint between network and container specified by given config.
-func Connect(config ConnectConfig) (*Endpoint, error) {
-	nw, err := load(config.Network)
+// Connect creates a network endpoint between network of given name and container specified by pid.
+func Connect(name string, pid int) (*Endpoint, error) {
+	nw, err := load(name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load network: %w", err)
 	}
@@ -149,7 +145,7 @@ func Connect(config ConnectConfig) (*Endpoint, error) {
 		IPNet: ipNet,
 	}
 
-	if err := d.connect(nw, ep, config.PID); err != nil {
+	if err := d.connect(nw, ep, pid); err != nil {
 		if releaseErr := allocator.releaseIP(ep.IPNet); releaseErr != nil {
 			log.Printf("Error release IP %s: %v", ep.IPNet.String(), releaseErr)
 		}
@@ -162,6 +158,22 @@ func Connect(config ConnectConfig) (*Endpoint, error) {
 // Disconnect removes network endpoint and releases its resources.
 func Disconnect(ep *Endpoint) error {
 	return allocator.releaseIP(ep.IPNet)
+}
+
+// EnableLoopback sets up loopback interface in container's network namespace.
+func EnableLoopback(pid int) error {
+	return withContainerNS(pid, func() error {
+		lo, err := netlink.LinkByName("lo")
+		if err != nil {
+			return fmt.Errorf("failed to find loopback interface: %w", err)
+		}
+
+		if err := netlink.LinkSetUp(lo); err != nil {
+			return fmt.Errorf("failed to set loopback up: %w", err)
+		}
+
+		return nil
+	})
 }
 
 // save persists network information to disk.
@@ -225,4 +237,26 @@ func loadAll() ([]*Network, error) {
 	}
 
 	return networks, nil
+}
+
+// withContainerNS runs fn in target pid's network namespace.
+func withContainerNS(pid int, fn func() error) error {
+	hostNS, err := netns.Get()
+	if err != nil {
+		return fmt.Errorf("failed to get host namespace: %w", err)
+	}
+	defer hostNS.Close()
+
+	containerNS, err := netns.GetFromPid(pid)
+	if err != nil {
+		return fmt.Errorf("failed to get container namespace: %w", err)
+	}
+	defer containerNS.Close()
+
+	if err = netns.Set(containerNS); err != nil {
+		return fmt.Errorf("failed to enter container namespace: %w", err)
+	}
+	defer netns.Set(hostNS)
+
+	return fn()
 }

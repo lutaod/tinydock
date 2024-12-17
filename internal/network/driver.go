@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netns"
 )
 
 const bridgePrefix = "br-"
@@ -71,23 +70,23 @@ func (d *BridgeDriver) delete(nw *Network) error {
 	return nil
 }
 
-func (b *BridgeDriver) connect(nw *Network, ep *Endpoint, pid int) error {
-	veth, err := b.createVethPair()
+func (d *BridgeDriver) connect(nw *Network, ep *Endpoint, pid int) error {
+	veth, err := d.createVethPair()
 	if err != nil {
 		return err
 	}
 
-	if err := b.configureHostNetwork(veth, nw, pid); err != nil {
+	if err := d.configureHostNetwork(veth, nw, pid); err != nil {
 		return err
 	}
 
 	return withContainerNS(pid, func() error {
-		return b.configureContainerNetwork(veth.PeerName, ep, nw)
+		return d.configureContainerNetwork(veth.PeerName, ep, nw)
 	})
 }
 
 // createVethPair generates a new virtual ethernet pair with unique names.
-func (b *BridgeDriver) createVethPair() (*netlink.Veth, error) {
+func (d *BridgeDriver) createVethPair() (*netlink.Veth, error) {
 	hostVethName := fmt.Sprintf("veth-%x", time.Now().UnixNano()&0xFFFFFF)
 	containerVethName := "c" + hostVethName[1:]
 
@@ -106,7 +105,7 @@ func (b *BridgeDriver) createVethPair() (*netlink.Veth, error) {
 }
 
 // configureHostNetwork moves peer interface to container and connects host interface to bridge.
-func (b *BridgeDriver) configureHostNetwork(veth *netlink.Veth, nw *Network, pid int) error {
+func (d *BridgeDriver) configureHostNetwork(veth *netlink.Veth, nw *Network, pid int) error {
 	// Move container end to container namespace
 	peer, err := netlink.LinkByName(veth.PeerName)
 	if err != nil {
@@ -134,30 +133,8 @@ func (b *BridgeDriver) configureHostNetwork(veth *netlink.Veth, nw *Network, pid
 	return nil
 }
 
-// withContainerNS runs fn in target pid's network namespace.
-func withContainerNS(pid int, fn func() error) error {
-	hostNS, err := netns.Get()
-	if err != nil {
-		return fmt.Errorf("failed to get host namespace: %w", err)
-	}
-	defer hostNS.Close()
-
-	containerNS, err := netns.GetFromPid(pid)
-	if err != nil {
-		return fmt.Errorf("failed to get container namespace: %w", err)
-	}
-	defer containerNS.Close()
-
-	if err = netns.Set(containerNS); err != nil {
-		return fmt.Errorf("failed to enter container namespace: %w", err)
-	}
-	defer netns.Set(hostNS)
-
-	return fn()
-}
-
 // configureContainerNetwork configures interface name, IP and routing inside container.
-func (b *BridgeDriver) configureContainerNetwork(containerVeth string, ep *Endpoint, nw *Network) error {
+func (d *BridgeDriver) configureContainerNetwork(containerVeth string, ep *Endpoint, nw *Network) error {
 	peer, err := netlink.LinkByName(containerVeth)
 	if err != nil {
 		return fmt.Errorf("failed to find container interface: %w", err)

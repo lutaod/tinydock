@@ -111,22 +111,18 @@ func Init(
 	}
 
 	if nw != "" {
-		config := network.ConnectConfig{
-			Network: nw,
-			ID:      info.ID,
-			PID:     info.PID,
-		}
-
-		endpoint, err := network.Connect(config)
+		endpoint, err := network.Connect(nw, info.PID)
 		if err != nil {
 			return err
 		}
 		info.Endpoint = *endpoint
+
+		if err := saveInfo(info); err != nil {
+			return err
+		}
 	}
 
-	if err := saveInfo(info); err != nil {
-		return err
-	}
+	network.EnableLoopback(info.PID)
 
 	// Initialize cgroup for container
 	if err := cgroups.Create(id); err != nil {
