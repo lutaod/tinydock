@@ -73,10 +73,13 @@ func newRunCmd() *ffcli.Command {
 	var envs container.Envs
 	runFlagSet.Var(&envs, "e", "Set environment variables")
 
+	var ports network.PortMappings
+	runFlagSet.Var(&ports, "p", "Publish a container's port(s) to the host")
+
 	return &ffcli.Command{
 		Name:       "run",
 		ShortHelp:  "Create and run a new container",
-		ShortUsage: "tinydock run (-it [-rm] | -d) [-c CPU] [-m MEMORY] [-network NETWORK] [-v SRC:DST]... [-e KEY=VALUE]... COMMAND [ARG...]",
+		ShortUsage: "tinydock run (-it [-rm] | -d) [-c CPU] [-m MEMORY] [-network NETWORK [-p HOST_PORT:CONTAINER_PORT]...] [-v SRC:DST]... [-e KEY=VALUE]... COMMAND [ARG...]",
 		FlagSet:    runFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -90,7 +93,11 @@ func newRunCmd() *ffcli.Command {
 				return fmt.Errorf("autoremove only works for interactive containers")
 			}
 
-			return container.Init(*interactive, *autoRemove, *detached, *cpuLimit, *memoryLimit, *nw, volumes, args, envs)
+			if *nw == "" && len(ports) > 0 {
+				return fmt.Errorf("port publishing requires a network to be specified")
+			}
+
+			return container.Init(*interactive, *autoRemove, *detached, *cpuLimit, *memoryLimit, *nw, ports, volumes, args, envs)
 		},
 	}
 }

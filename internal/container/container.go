@@ -28,6 +28,7 @@ func Init(
 	cpuLimit float64,
 	memoryLimit string,
 	nw string,
+	ports network.PortMappings,
 	volumes volume.Volumes,
 	args []string,
 	envs Envs,
@@ -111,7 +112,7 @@ func Init(
 	}
 
 	if nw != "" {
-		endpoint, err := network.Connect(nw, info.PID)
+		endpoint, err := network.Connect(nw, info.PID, ports)
 		if err != nil {
 			return err
 		}

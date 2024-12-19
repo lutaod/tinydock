@@ -36,8 +36,8 @@ type Network struct {
 // NOTE: No need to keep track of devices as kernel automatically cleans up veth devices
 // when container exits.
 type Endpoint struct {
-	IPNet *net.IPNet `json:"ipnet"`
-	// TODO: Add port mapping
+	IPNet        *net.IPNet   `json:"ipnet"`
+	PortMappings PortMappings `json:"port_mappings"`
 }
 
 // init initializes global IP allocator during package load.
@@ -125,7 +125,7 @@ func List() error {
 }
 
 // Connect creates a network endpoint between network of given name and container specified by pid.
-func Connect(name string, pid int) (*Endpoint, error) {
+func Connect(name string, pid int, portMappings PortMappings) (*Endpoint, error) {
 	nw, err := load(name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load network: %w", err)
@@ -150,6 +150,17 @@ func Connect(name string, pid int) (*Endpoint, error) {
 			log.Printf("Error release IP %s: %v", ep.IPNet.String(), releaseErr)
 		}
 		return nil, err
+	}
+
+	if len(portMappings) > 0 {
+		// TODO
+		// if err := setupPortForwarding(ep, portMappings); err != nil {
+		// 	if releaseErr := allocator.releaseIP(ep.IPNet); releaseErr != nil {
+		// 		log.Printf("Error releasing IP %s: %v", ep.IPNet.String(), releaseErr)
+		// 	}
+		// 	return nil, err
+		// }
+		ep.PortMappings = portMappings
 	}
 
 	return ep, nil
