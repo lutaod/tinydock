@@ -61,12 +61,12 @@ func Create(name, driver, subnet string) error {
 	}
 	_, ipNet, err := net.ParseCIDR(subnet)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse subnet: %w", err)
 	}
 
 	gatewayIPNet, err := allocator.requestIP(ipNet, true)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to request IP: %w", err)
 	}
 	ipNet.IP = gatewayIPNet.IP
 
@@ -75,7 +75,7 @@ func Create(name, driver, subnet string) error {
 		if releaseErr := allocator.releasePrefix(ipNet); releaseErr != nil {
 			log.Printf("failed to release IP after failed network creation: %v", releaseErr)
 		}
-		return err
+		return fmt.Errorf("failed to set up network: %w", err)
 	}
 
 	if err := enableExternalAccess(nw); err != nil {
@@ -92,7 +92,7 @@ func Create(name, driver, subnet string) error {
 func Remove(name string) error {
 	nw, err := load(name)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load network: %w", err)
 	}
 
 	d, ok := drivers[nw.Driver]
@@ -105,11 +105,11 @@ func Remove(name string) error {
 	}
 
 	if err := allocator.releasePrefix(nw.Subnet); err != nil {
-		return err
+		return fmt.Errorf("failed to release prefix: %w", err)
 	}
 
 	if err := d.delete(nw); err != nil {
-		return err
+		return fmt.Errorf("failed to delete network: %w", err)
 	}
 
 	return os.Remove(filepath.Join(networkDir, name+".json"))
@@ -119,7 +119,7 @@ func Remove(name string) error {
 func List() error {
 	networks, err := loadAll()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load networks: %w", err)
 	}
 
 	fmt.Printf("%-15s %-10s %s\n", "NAME", "DRIVER", "SUBNET")
@@ -149,7 +149,7 @@ func Connect(name string, pid int, portMappings PortMappings) (*Endpoint, error)
 
 	ipNet, err := allocator.requestIP(nw.Subnet, false)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to request IP: %w", err)
 	}
 
 	ep := &Endpoint{
@@ -160,7 +160,7 @@ func Connect(name string, pid int, portMappings PortMappings) (*Endpoint, error)
 		if releaseErr := allocator.releaseIP(ep.IPNet); releaseErr != nil {
 			log.Printf("Error release IP %s: %v", ep.IPNet.String(), releaseErr)
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to network: %w", err)
 	}
 
 	// if len(portMappings) > 0 {
@@ -252,7 +252,7 @@ func loadAll() ([]*Network, error) {
 		name := strings.TrimSuffix(f.Name(), ".json")
 		nw, err := load(name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to load network: %w", err)
 		}
 		networks = append(networks, nw)
 	}
