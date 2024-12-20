@@ -78,6 +78,13 @@ func Create(name, driver, subnet string) error {
 		return err
 	}
 
+	if err := enableExternalAccess(nw); err != nil {
+		if releaseErr := allocator.releasePrefix(ipNet); releaseErr != nil {
+			log.Printf("failed to release IP after failed network creation: %v", releaseErr)
+		}
+		return fmt.Errorf("failed to enable external access: %w", err)
+	}
+
 	return save(nw)
 }
 
@@ -91,6 +98,10 @@ func Remove(name string) error {
 	d, ok := drivers[nw.Driver]
 	if !ok {
 		return fmt.Errorf("unsupported driver: %s", nw.Driver)
+	}
+
+	if err := disableExternalAccess(nw); err != nil {
+		return fmt.Errorf("disable external access: %w", err)
 	}
 
 	if err := allocator.releasePrefix(nw.Subnet); err != nil {
@@ -152,16 +163,15 @@ func Connect(name string, pid int, portMappings PortMappings) (*Endpoint, error)
 		return nil, err
 	}
 
-	if len(portMappings) > 0 {
-		// TODO
-		// if err := setupPortForwarding(ep, portMappings); err != nil {
-		// 	if releaseErr := allocator.releaseIP(ep.IPNet); releaseErr != nil {
-		// 		log.Printf("Error releasing IP %s: %v", ep.IPNet.String(), releaseErr)
-		// 	}
-		// 	return nil, err
-		// }
-		ep.PortMappings = portMappings
-	}
+	// if len(portMappings) > 0 {
+	// 	if err := setupPortForwarding(ep, portMappings); err != nil {
+	// 		if releaseErr := allocator.releaseIP(ep.IPNet); releaseErr != nil {
+	// 			log.Printf("Error releasing IP %s: %v", ep.IPNet.String(), releaseErr)
+	// 		}
+	// 		return nil, err
+	// 	}
+	// 	ep.PortMappings = portMappings
+	// }
 
 	return ep, nil
 }
