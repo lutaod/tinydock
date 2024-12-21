@@ -76,7 +76,7 @@ func (d *BridgeDriver) connect(nw *Network, ep *Endpoint, pid int) error {
 		return err
 	}
 
-	if err := d.configureHostNetwork(veth, nw, pid); err != nil {
+	if err := d.configureHostNetwork(veth, ep, nw, pid); err != nil {
 		return err
 	}
 
@@ -105,7 +105,7 @@ func (d *BridgeDriver) createVethPair() (*netlink.Veth, error) {
 }
 
 // configureHostNetwork moves peer interface to container and connects host interface to bridge.
-func (d *BridgeDriver) configureHostNetwork(veth *netlink.Veth, nw *Network, pid int) error {
+func (d *BridgeDriver) configureHostNetwork(veth *netlink.Veth, ep *Endpoint, nw *Network, pid int) error {
 	// Move container end to container namespace
 	peer, err := netlink.LinkByName(veth.PeerName)
 	if err != nil {
@@ -129,6 +129,7 @@ func (d *BridgeDriver) configureHostNetwork(veth *netlink.Veth, nw *Network, pid
 	if err = netlink.LinkSetUp(veth); err != nil {
 		return fmt.Errorf("failed to set host veth up: %w", err)
 	}
+	ep.HostInterface = bridgePrefix + nw.Name
 
 	return nil
 }

@@ -3,6 +3,7 @@ package network
 import (
 	"fmt"
 	"os/exec"
+	"strconv"
 )
 
 // execIptables executes iptables command with given arguments and returns error if any.
@@ -35,4 +36,95 @@ func disableExternalAccess(nw *Network) error {
 		"!", "-o", "br-"+nw.Name,
 		"-j", "MASQUERADE",
 	)
+}
+
+// setupPortForwarding configures iptables rules for port forwarding to container.
+//
+// NOTE: Set `net.ipv4.conf.all.route_localnet=1` to enable localhost access.
+// Without this setting, the kernel blocks localhost port forwarding after DNAT.
+func setupPortForwarding(ep *Endpoint) error {
+	containerIP := ep.IPNet.IP.String()
+
+	for _, pm := range ep.PortMappings {
+		if err := execIptables(
+			"-t", "nat",
+			"-A", "PREROUTING",
+			"!", "-i", ep.HostInterface,
+			"-p", "tcp",
+			"--dport", strconv.Itoa(int(pm.HostPort)),
+			"-j", "DNAT",
+			"--to-destination", fmt.Sprintf("%s:%d", containerIP, pm.ContainerPort),
+		); err != nil {
+			return err
+		}
+
+		if err := execIptables(
+			"-t", "nat",
+			"-A", "OUTPUT",
+			"-p", "tcp",
+			"-d", "127.0.0.1",
+			"--dport", strconv.Itoa(int(pm.HostPort)),
+			"-j", "DNAT",
+			"--to-destination", fmt.Sprintf("%s:%d", containerIP, pm.ContainerPort),
+		); err != nil {
+			return err
+		}
+
+		if err := execIptables(
+			"-t", "nat",
+			"-A", "POSTROUTING",
+			"-p", "tcp",
+			"-d", containerIP,
+			"--dport", strconv.Itoa(int(pm.ContainerPort)),
+			"-j", "MASQUERADE",
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// cleanupPortForwarding removes iptables rules configured for port forwarding to container.
+func cleanupPortForwarding(ep *Endpoint) error {
+	containerIP := ep.IPNet.IP.String()
+
+	for _, pm := range ep.PortMappings {
+		if err := execIptables(
+			"-t", "nat",
+			"-D", "PREROUTING",
+			"!", "-i", ep.HostInterface,
+			"-p", "tcp",
+			"--dport", strconv.Itoa(int(pm.HostPort)),
+			"-j", "DNAT",
+			"--to-destination", fmt.Sprintf("%s:%d", containerIP, pm.ContainerPort),
+		); err != nil {
+			return err
+		}
+
+		if err := execIptables(
+			"-t", "nat",
+			"-D", "OUTPUT",
+			"-p", "tcp",
+			"-d", "127.0.0.1",
+			"--dport", strconv.Itoa(int(pm.HostPort)),
+			"-j", "DNAT",
+			"--to-destination", fmt.Sprintf("%s:%d", containerIP, pm.ContainerPort),
+		); err != nil {
+			return err
+		}
+
+		if err := execIptables(
+			"-t", "nat",
+			"-D", "POSTROUTING",
+			"-p", "tcp",
+			"-d", containerIP,
+			"--dport", strconv.Itoa(int(pm.ContainerPort)),
+			"-j", "MASQUERADE",
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

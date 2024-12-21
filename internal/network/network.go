@@ -36,8 +36,9 @@ type Network struct {
 // NOTE: No need to keep track of devices as kernel automatically cleans up veth devices
 // when container exits.
 type Endpoint struct {
-	IPNet        *net.IPNet   `json:"ipnet"`
-	PortMappings PortMappings `json:"port_mappings"`
+	IPNet         *net.IPNet   `json:"ipnet"`
+	HostInterface string       `json:"host_interface"`
+	PortMappings  PortMappings `json:"port_mappings"`
 }
 
 // init initializes global IP allocator during package load.
@@ -136,7 +137,7 @@ func List() error {
 }
 
 // Connect creates a network endpoint between network of given name and container specified by pid.
-func Connect(name string, pid int, portMappings PortMappings) (*Endpoint, error) {
+func Connect(name string, pid int, pms PortMappings) (*Endpoint, error) {
 	nw, err := load(name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load network: %w", err)
@@ -153,7 +154,8 @@ func Connect(name string, pid int, portMappings PortMappings) (*Endpoint, error)
 	}
 
 	ep := &Endpoint{
-		IPNet: ipNet,
+		IPNet:        ipNet,
+		PortMappings: pms,
 	}
 
 	if err := d.connect(nw, ep, pid); err != nil {
@@ -163,21 +165,24 @@ func Connect(name string, pid int, portMappings PortMappings) (*Endpoint, error)
 		return nil, fmt.Errorf("failed to connect to network: %w", err)
 	}
 
-	// if len(portMappings) > 0 {
-	// 	if err := setupPortForwarding(ep, portMappings); err != nil {
-	// 		if releaseErr := allocator.releaseIP(ep.IPNet); releaseErr != nil {
-	// 			log.Printf("Error releasing IP %s: %v", ep.IPNet.String(), releaseErr)
-	// 		}
-	// 		return nil, err
-	// 	}
-	// 	ep.PortMappings = portMappings
-	// }
+	if len(pms) > 0 {
+		if err := setupPortForwarding(ep); err != nil {
+			if releaseErr := allocator.releaseIP(ep.IPNet); releaseErr != nil {
+				log.Printf("Error releasing IP %s: %v", ep.IPNet.String(), releaseErr)
+			}
+			return nil, err
+		}
+	}
 
 	return ep, nil
 }
 
 // Disconnect removes network endpoint and releases its resources.
 func Disconnect(ep *Endpoint) error {
+	if err := cleanupPortForwarding(ep); err != nil {
+
+	}
+
 	return allocator.releaseIP(ep.IPNet)
 }
 
