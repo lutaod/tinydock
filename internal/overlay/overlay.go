@@ -9,29 +9,31 @@ import (
 	"syscall"
 
 	"github.com/lutaod/tinydock/assets"
+	"github.com/lutaod/tinydock/internal/config"
 	"github.com/lutaod/tinydock/internal/volume"
 )
 
 const (
-	tinydockRoot = "/var/lib/tinydock"
+	baseImage = "busybox"
 
-	imageDir     = "image"
-	tarballDir   = "tarball"
-	extractedDir = "extracted"
-	baseImage    = "busybox"
+	upper  = "upper"
+	work   = "work"
+	merged = "merged"
+)
 
-	overlayDir = "overlay"
-	upperDir   = "upper"
-	workDir    = "work"
-	mergedDir  = "merged"
+var (
+	overlayDir   = filepath.Join(config.Root, "overlay")
+	imageDir     = filepath.Join(config.Root, "image")
+	tarballDir   = filepath.Join(imageDir, "tarball")
+	extractedDir = filepath.Join(imageDir, "extracted")
 )
 
 // Setup prepares overlay filesystem and mount volumes for a container.
 func Setup(image, containerID string, volumes volume.Volumes) (string, error) {
 	paths := map[string]string{
-		upperDir:  filepath.Join(tinydockRoot, overlayDir, containerID, upperDir),
-		workDir:   filepath.Join(tinydockRoot, overlayDir, containerID, workDir),
-		mergedDir: filepath.Join(tinydockRoot, overlayDir, containerID, mergedDir),
+		upper:  filepath.Join(overlayDir, containerID, upper),
+		work:   filepath.Join(overlayDir, containerID, work),
+		merged: filepath.Join(overlayDir, containerID, merged),
 	}
 
 	for _, dir := range paths {
@@ -47,16 +49,16 @@ func Setup(image, containerID string, volumes volume.Volumes) (string, error) {
 
 	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s",
 		lowerDir,
-		paths[upperDir],
-		paths[workDir],
+		paths[upper],
+		paths[work],
 	)
 
-	if err := syscall.Mount("overlay", paths[mergedDir], "overlay", 0, opts); err != nil {
+	if err := syscall.Mount("overlay", paths[merged], "overlay", 0, opts); err != nil {
 		return "", fmt.Errorf("failed to mount overlayfs: %w", err)
 	}
 
 	for _, v := range volumes {
-		target := filepath.Join(paths[mergedDir], v.Target)
+		target := filepath.Join(paths[merged], v.Target)
 
 		// Create host source directory if does not exist
 		if _, err := os.Stat(v.Source); os.IsNotExist(err) {
@@ -76,17 +78,17 @@ func Setup(image, containerID string, volumes volume.Volumes) (string, error) {
 		}
 	}
 
-	return paths[mergedDir], nil
+	return paths[merged], nil
 }
 
 // SaveImage creates a new image from a container's merged directory.
 func SaveImage(containerID, imageName string) error {
-	imagePath := filepath.Join(tinydockRoot, imageDir, imageName)
+	imagePath := filepath.Join(imageDir, imageName)
 	if _, err := os.Stat(imagePath); err == nil {
 		return fmt.Errorf("image '%s' already exists", imageName)
 	}
 
-	mergedPath := filepath.Join(tinydockRoot, overlayDir, containerID, mergedDir)
+	mergedPath := filepath.Join(overlayDir, containerID, merged)
 	if _, err := os.Stat(mergedPath); err != nil {
 		return fmt.Errorf("container filesystem not found: %w", err)
 	}
@@ -101,7 +103,7 @@ func SaveImage(containerID, imageName string) error {
 
 // Cleanup unmounts any volumes and removes all overlay filesystem resources for a container.
 func Cleanup(containerID string, volumes volume.Volumes) error {
-	mergedPath := filepath.Join(tinydockRoot, overlayDir, containerID, mergedDir)
+	mergedPath := filepath.Join(overlayDir, containerID, merged)
 
 	for _, v := range volumes {
 		target := filepath.Join(mergedPath, v.Target)
@@ -114,7 +116,7 @@ func Cleanup(containerID string, volumes volume.Volumes) error {
 		return fmt.Errorf("failed to unmount overlayfs: %w", err)
 	}
 
-	containerDir := filepath.Join(tinydockRoot, overlayDir, containerID)
+	containerDir := filepath.Join(overlayDir, containerID)
 	if err := os.RemoveAll(containerDir); err != nil {
 		return fmt.Errorf("failed to remove overlay directory: %w", err)
 	}
@@ -131,8 +133,8 @@ func Cleanup(containerID string, volumes volume.Volumes) error {
 //
 // If base image tarball is missing, it will be copied from project assets.
 func extractImage(image string) (string, error) {
-	tarballPath := filepath.Join(tinydockRoot, imageDir, tarballDir, image+".tar.gz")
-	extractedPath := filepath.Join(tinydockRoot, imageDir, extractedDir, image)
+	tarballPath := filepath.Join(tarballDir, image+".tar.gz")
+	extractedPath := filepath.Join(extractedDir, image)
 
 	// Check if already extracted
 	if _, err := os.Stat(extractedPath); err == nil {

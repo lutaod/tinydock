@@ -10,18 +10,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lutaod/tinydock/internal/config"
 	"github.com/lutaod/tinydock/internal/network"
 	"github.com/lutaod/tinydock/internal/volume"
 )
 
 const (
-	containersDir = "/var/lib/tinydock/containers"
-	infoFile      = "info.json"
+	infoFile = "info.json"
 
 	idLength                = 6
 	maxPrintCmdLength       = 30
 	truncatedPrintCmdLength = maxPrintCmdLength - 3 // Reserve space for "..."
 )
+
+var containersDir = filepath.Join(config.Root, "containers")
 
 // status represents the runtime state of container.
 type status string

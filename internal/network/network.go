@@ -11,18 +11,23 @@ import (
 
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
+
+	"github.com/lutaod/tinydock/internal/config"
 )
 
 const (
 	defaultSubnet = "172.26.0.0/16"
-	networkDir    = "/var/lib/tinydock/network"
 )
 
-var drivers = map[string]Driver{
-	"bridge": &BridgeDriver{},
-}
+var (
+	networkDir = filepath.Join(config.Root, "network")
 
-var allocator *ipAllocator
+	drivers = map[string]Driver{
+		"bridge": &BridgeDriver{},
+	}
+
+	allocator *ipAllocator
+)
 
 // Network represents network configuration.
 type Network struct {
