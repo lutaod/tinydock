@@ -79,11 +79,11 @@ func newRunCmd() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "run",
 		ShortHelp:  "Create and run a new container",
-		ShortUsage: "tinydock run (-it [-rm] | -d) [-c CPU] [-m MEMORY] [-network NETWORK [-p HOST_PORT:CONTAINER_PORT]...] [-v SRC:DST]... [-e KEY=VALUE]... COMMAND [ARG...]",
+		ShortUsage: "tinydock run (-it [-rm] | -d) [-c CPU] [-m MEMORY] [-network NETWORK [-p HOST_PORT:CONTAINER_PORT]...] [-v SRC:DST]... [-e KEY=VALUE]... IMAGE COMMAND [ARG...]",
 		FlagSet:    runFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("'tinydock run' requires at least 1 argument")
+			if len(args) < 2 {
+				return fmt.Errorf("'tinydock run' requires at least 2 arguments")
 			}
 
 			if *interactive && *detached {
@@ -97,7 +97,7 @@ func newRunCmd() *ffcli.Command {
 				return fmt.Errorf("port publishing requires a network to be specified")
 			}
 
-			return container.Init(*interactive, *autoRemove, *detached, *cpuLimit, *memoryLimit, *nw, ports, volumes, args, envs)
+			return container.Init(args[0], args[1:], *interactive, *autoRemove, *detached, *nw, ports, volumes, envs, *cpuLimit, *memoryLimit)
 		},
 	}
 }

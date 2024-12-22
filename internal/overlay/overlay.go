@@ -14,15 +14,20 @@ import (
 
 const (
 	tinydockRoot = "/var/lib/tinydock"
+
 	imageDir     = "image"
-	overlayDir   = "overlay"
-	upperDir     = "upper"
-	workDir      = "work"
-	mergedDir    = "merged"
+	tarballDir   = "tarball"
+	extractedDir = "extracted"
+	baseImage    = "busybox"
+
+	overlayDir = "overlay"
+	upperDir   = "upper"
+	workDir    = "work"
+	mergedDir  = "merged"
 )
 
 // Setup prepares overlay filesystem and mount volumes for a container.
-func Setup(containerID string, volumes volume.Volumes) (string, error) {
+func Setup(image, containerID string, volumes volume.Volumes) (string, error) {
 	paths := map[string]string{
 		upperDir:  filepath.Join(tinydockRoot, overlayDir, containerID, upperDir),
 		workDir:   filepath.Join(tinydockRoot, overlayDir, containerID, workDir),
@@ -35,7 +40,7 @@ func Setup(containerID string, volumes volume.Volumes) (string, error) {
 		}
 	}
 
-	lowerDir, err := extractBaseImage()
+	lowerDir, err := extractImage(image)
 	if err != nil {
 		return "", err
 	}
@@ -117,43 +122,62 @@ func Cleanup(containerID string, volumes volume.Volumes) error {
 	return nil
 }
 
-// extractBaseImage extracts embedded base image tar to image directory.
-func extractBaseImage() (string, error) {
-	baseImageDir := filepath.Join(tinydockRoot, imageDir, "busybox")
+// extractImage extracts the specified image tarball if not already extracted.
+//
+// The function manages two directories:
+//   - tarballs/: stores compressed images (.tar.gz).
+//     Custom images and committed images should be placed here.
+//   - extracted/: stores uncompressed filesystems to be used as lower directories for overlayfs.
+//
+// If base image tarball is missing, it will be copied from project assets.
+func extractImage(image string) (string, error) {
+	tarballPath := filepath.Join(tinydockRoot, imageDir, tarballDir, image+".tar.gz")
+	extractedPath := filepath.Join(tinydockRoot, imageDir, extractedDir, image)
 
-	// Skip if already extracted
-	if _, err := os.Stat(baseImageDir); err == nil {
-		return baseImageDir, nil
+	// Check if already extracted
+	if _, err := os.Stat(extractedPath); err == nil {
+		return extractedPath, nil
 	}
 
-	if err := os.MkdirAll(baseImageDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create image directory: %w", err)
+	// Check if tarball exists, base image can be copied from embedded assets if not
+	if _, err := os.Stat(tarballPath); err != nil {
+		if image == baseImage {
+			src, err := assets.Files.Open(baseImage + ".tar.gz")
+			if err != nil {
+				return "", fmt.Errorf("failed to open embedded tarball file: %w", err)
+			}
+			defer src.Close()
+
+			if err := os.MkdirAll(filepath.Dir(tarballPath), 0755); err != nil {
+				return "", fmt.Errorf("failed to create tarball directory: %w", err)
+			}
+
+			dst, err := os.Create(tarballPath)
+			if err != nil {
+				return "", fmt.Errorf("failed to create tarball file: %w", err)
+			}
+			defer dst.Close()
+
+			if _, err := io.Copy(dst, src); err != nil {
+				return "", fmt.Errorf("failed to write tarball file: %w", err)
+			}
+		} else {
+			return "", fmt.Errorf("image '%s' not found", image)
+		}
 	}
 
-	// Create temp file for embedded tar so that 'tar' command has file path to extract from
-	tmpFile, err := os.CreateTemp("", "busybox-*.tar.gz")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
-	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
-
-	src, err := assets.Files.Open("busybox.tar.gz")
-	if err != nil {
-		return "", fmt.Errorf("failed to open embedded file: %w", err)
-	}
-	defer src.Close()
-
-	if _, err := io.Copy(tmpFile, src); err != nil {
-		return "", fmt.Errorf("failed to write temp file: %w", err)
+	// Extract tarball
+	if err := os.MkdirAll(extractedPath, 0755); err != nil {
+		return "", fmt.Errorf("failed to create extracted directory: %w", err)
 	}
 
-	cmd := exec.Command("tar", "xzf", tmpFile.Name(), "-C", baseImageDir)
+	cmd := exec.Command("tar", "xzf", tarballPath, "-C", extractedPath)
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to extract base image: %w", err)
+		os.RemoveAll(extractedPath)
+		return "", fmt.Errorf("failed to extract image: %w", err)
 	}
 
-	return baseImageDir, nil
+	return extractedPath, nil
 }
 
 // copyDir copies the contents of src directory to dst directory.

@@ -22,16 +22,17 @@ import (
 // Init spawns a container process that initially acts as the init process (PID 1)
 // before being replaced by user command.
 func Init(
+	image string,
+	args []string,
 	interactive bool,
 	autoRemove bool,
 	detached bool,
-	cpuLimit float64,
-	memoryLimit string,
 	nw string,
 	ports network.PortMappings,
 	volumes volume.Volumes,
-	args []string,
 	envs Envs,
+	cpuLimit float64,
+	memoryLimit string,
 ) error {
 	// Create unnamed pipe for passing user command
 	reader, writer, err := os.Pipe()
@@ -78,8 +79,7 @@ func Init(
 		cmd.Stderr = logFile
 	}
 
-	// Initialize overlay filesystem for container
-	mergedDir, err := overlay.Setup(id, volumes)
+	mergedDir, err := overlay.Setup(image, id, volumes)
 	if err != nil {
 		return fmt.Errorf("failed to setup overlay: %w", err)
 	}
