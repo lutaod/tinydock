@@ -39,6 +39,7 @@ func main() {
 			newLogsCmd(),
 			newExecCmd(),
 			newCommitCmd(),
+			newImagesCmd(),
 			newNetworkCmd(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
@@ -229,6 +230,21 @@ func newCommitCmd() *ffcli.Command {
 			fmt.Println(args[1])
 
 			return nil
+		},
+	}
+}
+
+func newImagesCmd() *ffcli.Command {
+	return &ffcli.Command{
+		Name:       "images",
+		ShortUsage: "tinydock images",
+		ShortHelp:  "List images",
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) != 0 {
+				return fmt.Errorf("'tinydock images' accepts no arguments")
+			}
+
+			return container.ListImages()
 		},
 	}
 }

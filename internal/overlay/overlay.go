@@ -24,7 +24,7 @@ const (
 var (
 	overlayDir  = filepath.Join(config.Root, "overlay")
 	imageDir    = filepath.Join(config.Root, "image")
-	registryDir = filepath.Join(imageDir, "registry")
+	RegistryDir = filepath.Join(imageDir, "registry")
 	rootfsDir   = filepath.Join(imageDir, "rootfs")
 )
 
@@ -83,7 +83,7 @@ func Setup(image, containerID string, volumes volume.Volumes) (string, error) {
 
 // SaveImage creates a new tarball image from a container's merged directory.
 func SaveImage(containerID, imageName string) error {
-	tarballPath := filepath.Join(registryDir, imageName+".tar.gz")
+	tarballPath := filepath.Join(RegistryDir, imageName+".tar.gz")
 	if _, err := os.Stat(tarballPath); err == nil {
 		return fmt.Errorf("image '%s' already exists", imageName)
 	}
@@ -138,7 +138,7 @@ func Cleanup(containerID string, volumes volume.Volumes) error {
 //
 // If base image tarball is missing, it will be copied from project assets.
 func extractImage(image string) (string, error) {
-	registryPath := filepath.Join(registryDir, image+".tar.gz")
+	registryPath := filepath.Join(RegistryDir, image+".tar.gz")
 	rootfsPath := filepath.Join(rootfsDir, image)
 
 	// Check if already extracted

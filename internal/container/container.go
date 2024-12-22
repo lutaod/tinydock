@@ -407,6 +407,38 @@ func Commit(id, name string) error {
 	return nil
 }
 
+// ListImages prints information about available images.
+func ListImages() error {
+	entries, err := os.ReadDir(overlay.RegistryDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read image registry: %w", err)
+	}
+
+	fmt.Printf("%-20s %-20s %s\n", "IMAGE", "CREATED", "SIZE")
+
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".tar.gz") {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		name := strings.TrimSuffix(entry.Name(), ".tar.gz")
+		size := fmt.Sprintf("%.2f MB", float64(info.Size())/1024/1024)
+		created := info.ModTime().Format("2006-01-02 15:04:05")
+
+		fmt.Printf("%-20s %-20s %s\n", name, created, size)
+	}
+
+	return nil
+}
+
 // createContainerDir creates container directory if it doesn't exist.
 func createContainerDir(id string) error {
 	containerDir := filepath.Join(containersDir, id)
