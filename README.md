@@ -16,10 +16,10 @@ $ docker export temp | gzip > alpine.tar.gz
 $ docker rm temp
 ```
 
-3. Move the tarball to tinydock's image directory:
+3. Move the tarball to tinydock's image registry directory:
 ```bash
-$ sudo mkdir -p /var/lib/tinydock/image/tarball
-$ sudo mv alpine.tar.gz /var/lib/tinydock/image/tarball/
+$ sudo mkdir -p /var/lib/tinydock/image/registry
+$ sudo mv alpine.tar.gz /var/lib/tinydock/image/registry/
 ```
 
 4. Now you can use the image with tinydock:

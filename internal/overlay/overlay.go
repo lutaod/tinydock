@@ -22,10 +22,10 @@ const (
 )
 
 var (
-	overlayDir   = filepath.Join(config.Root, "overlay")
-	imageDir     = filepath.Join(config.Root, "image")
-	tarballDir   = filepath.Join(imageDir, "tarball")
-	extractedDir = filepath.Join(imageDir, "extracted")
+	overlayDir  = filepath.Join(config.Root, "overlay")
+	imageDir    = filepath.Join(config.Root, "image")
+	registryDir = filepath.Join(imageDir, "registry")
+	rootfsDir   = filepath.Join(imageDir, "rootfs")
 )
 
 // Setup prepares overlay filesystem and mount volumes for a container.
@@ -83,7 +83,7 @@ func Setup(image, containerID string, volumes volume.Volumes) (string, error) {
 
 // SaveImage creates a new tarball image from a container's merged directory.
 func SaveImage(containerID, imageName string) error {
-	tarballPath := filepath.Join(tarballDir, imageName+".tar.gz")
+	tarballPath := filepath.Join(registryDir, imageName+".tar.gz")
 	if _, err := os.Stat(tarballPath); err == nil {
 		return fmt.Errorf("image '%s' already exists", imageName)
 	}
@@ -132,22 +132,22 @@ func Cleanup(containerID string, volumes volume.Volumes) error {
 // extractImage extracts the specified image tarball if not already extracted.
 //
 // The function manages two directories:
-//   - tarballs/: stores compressed images (.tar.gz).
+//   - registry/: stores compressed images (.tar.gz).
 //     Custom images and committed images should be placed here.
-//   - extracted/: stores uncompressed filesystems to be used as lower directories for overlayfs.
+//   - rootfs/: stores uncompressed filesystems to be used as lower directories for overlayfs.
 //
 // If base image tarball is missing, it will be copied from project assets.
 func extractImage(image string) (string, error) {
-	tarballPath := filepath.Join(tarballDir, image+".tar.gz")
-	extractedPath := filepath.Join(extractedDir, image)
+	registryPath := filepath.Join(registryDir, image+".tar.gz")
+	rootfsPath := filepath.Join(rootfsDir, image)
 
 	// Check if already extracted
-	if _, err := os.Stat(extractedPath); err == nil {
-		return extractedPath, nil
+	if _, err := os.Stat(rootfsPath); err == nil {
+		return rootfsPath, nil
 	}
 
 	// Check if tarball exists, base image can be copied from embedded assets if not
-	if _, err := os.Stat(tarballPath); err != nil {
+	if _, err := os.Stat(registryPath); err != nil {
 		if image == baseImage {
 			src, err := assets.Files.Open(baseImage + ".tar.gz")
 			if err != nil {
@@ -155,11 +155,11 @@ func extractImage(image string) (string, error) {
 			}
 			defer src.Close()
 
-			if err := os.MkdirAll(filepath.Dir(tarballPath), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(registryPath), 0755); err != nil {
 				return "", fmt.Errorf("failed to create tarball directory: %w", err)
 			}
 
-			dst, err := os.Create(tarballPath)
+			dst, err := os.Create(registryPath)
 			if err != nil {
 				return "", fmt.Errorf("failed to create tarball file: %w", err)
 			}
@@ -174,15 +174,15 @@ func extractImage(image string) (string, error) {
 	}
 
 	// Extract tarball
-	if err := os.MkdirAll(extractedPath, 0755); err != nil {
+	if err := os.MkdirAll(rootfsPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to create extracted directory: %w", err)
 	}
 
-	cmd := exec.Command("tar", "xzf", tarballPath, "-C", extractedPath)
+	cmd := exec.Command("tar", "xzf", registryPath, "-C", rootfsPath)
 	if err := cmd.Run(); err != nil {
-		os.RemoveAll(extractedPath)
+		os.RemoveAll(rootfsPath)
 		return "", fmt.Errorf("failed to extract image: %w", err)
 	}
 
-	return extractedPath, nil
+	return rootfsPath, nil
 }
