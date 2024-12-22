@@ -142,7 +142,7 @@ func newStopCmd() *ffcli.Command {
 					log.Printf("Error stopping container %s: %v", id, err)
 					continue
 				}
-				log.Println(id)
+				fmt.Println(id)
 			}
 
 			return nil
@@ -170,7 +170,7 @@ func newRemoveCmd() *ffcli.Command {
 					log.Printf("Error removing container %s: %v", id, err)
 					continue
 				}
-				log.Println(id)
+				fmt.Println(id)
 			}
 
 			return nil
@@ -268,7 +268,7 @@ func newNetworkCreateCmd() *ffcli.Command {
 			if err := network.Create(args[0], *driver, *subnet); err != nil {
 				return err
 			}
-			log.Println(args[0])
+			fmt.Println(args[0])
 
 			return nil
 		},
@@ -290,7 +290,7 @@ func newNetworkRemoveCmd() *ffcli.Command {
 					log.Printf("Error removing network: %v", err)
 					continue
 				}
-				log.Println(name)
+				fmt.Println(name)
 			}
 
 			return nil
