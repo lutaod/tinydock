@@ -81,10 +81,10 @@ func Setup(image, containerID string, volumes volume.Volumes) (string, error) {
 	return paths[merged], nil
 }
 
-// SaveImage creates a new image from a container's merged directory.
+// SaveImage creates a new tarball image from a container's merged directory.
 func SaveImage(containerID, imageName string) error {
-	imagePath := filepath.Join(imageDir, imageName)
-	if _, err := os.Stat(imagePath); err == nil {
+	tarballPath := filepath.Join(tarballDir, imageName+".tar.gz")
+	if _, err := os.Stat(tarballPath); err == nil {
 		return fmt.Errorf("image '%s' already exists", imageName)
 	}
 
@@ -93,9 +93,14 @@ func SaveImage(containerID, imageName string) error {
 		return fmt.Errorf("container filesystem not found: %w", err)
 	}
 
-	if err := copyDir(mergedPath, imagePath); err != nil {
-		os.RemoveAll(imagePath)
-		return fmt.Errorf("failed to save filesystem: %w", err)
+	if err := os.MkdirAll(filepath.Dir(tarballPath), 0755); err != nil {
+		return fmt.Errorf("failed to create tarball directory: %w", err)
+	}
+
+	cmd := exec.Command("tar", "czf", tarballPath, "-C", mergedPath, ".")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		os.Remove(tarballPath)
+		return fmt.Errorf("failed to create image tarball: %s", out)
 	}
 
 	return nil
@@ -180,14 +185,4 @@ func extractImage(image string) (string, error) {
 	}
 
 	return extractedPath, nil
-}
-
-// copyDir copies the contents of src directory to dst directory.
-func copyDir(src, dst string) error {
-	cmd := exec.Command("cp", "-r", src+"/.", dst)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("copy failed: %s", output)
-	}
-
-	return nil
 }

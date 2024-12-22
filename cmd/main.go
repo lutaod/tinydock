@@ -223,7 +223,12 @@ func newCommitCmd() *ffcli.Command {
 				return fmt.Errorf("'tinydock commit' requires exactly 2 arguments")
 			}
 
-			return container.Commit(args[0], args[1])
+			if err := container.Commit(args[0], args[1]); err != nil {
+				return err
+			}
+			fmt.Println(args[1])
+
+			return nil
 		},
 	}
 }
