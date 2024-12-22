@@ -117,13 +117,13 @@ func Init(
 			return err
 		}
 		info.Endpoint = *endpoint
-
-		if err := saveInfo(info); err != nil {
-			return err
-		}
 	}
 
 	network.EnableLoopback(info.PID)
+
+	if err := saveInfo(info); err != nil {
+		return err
+	}
 
 	// Initialize cgroup for container
 	if err := cgroups.Create(id); err != nil {
