@@ -18,7 +18,7 @@ const (
 	containersDir = "/var/lib/tinydock/containers"
 	infoFile      = "info.json"
 
-	idLength                = 8
+	idLength                = 6
 	maxPrintCmdLength       = 30
 	truncatedPrintCmdLength = maxPrintCmdLength - 3 // Reserve space for "..."
 )
