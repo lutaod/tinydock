@@ -87,8 +87,6 @@ func Init(
 	// Set merged overlay directory as working directory for container's root filesystem
 	cmd.Dir = mergedDir
 
-	log.Printf("Container %s overlayfs initialized", id)
-
 	// Spawn container process
 	if err := cmd.Start(); err != nil {
 		reader.Close()
@@ -100,7 +98,6 @@ func Init(
 	writeArgsToPipe(writer, args)
 
 	pid := cmd.Process.Pid
-	log.Printf("Container process started with PID %d", cmd.Process.Pid)
 
 	info := &info{
 		ID:        id,
@@ -146,14 +143,12 @@ func Init(
 		}
 	}
 
-	log.Printf("Container %s cgroups initialized", id)
-
 	if detached {
 		if err := cmd.Process.Release(); err != nil {
 			return fmt.Errorf("failed to release container: %w", err)
 		}
 
-		log.Println(id)
+		fmt.Println(id)
 		return nil
 	}
 
