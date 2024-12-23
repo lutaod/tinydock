@@ -40,6 +40,7 @@ type info struct {
 	ID        string           `json:"id"`
 	PID       int              `json:"pid"`
 	Status    status           `json:"status"`
+	Image     string           `json:"image"`
 	Command   []string         `json:"command"`
 	CreatedAt time.Time        `json:"createdAt"`
 	Volumes   volume.Volumes   `json:"volumes"`
@@ -96,7 +97,8 @@ func listInfo(showAll bool) error {
 		return fmt.Errorf("failed to read containers directory: %w", err)
 	}
 
-	fmt.Printf("%-10s %-15s %-10s %-20s %s\n", "ID", "STATUS", "PID", "CREATED", "COMMAND")
+	fmt.Printf("%-10s %-15s %-10s %-10s %-20s %s\n",
+		"ID", "IMAGE", "STATUS", "PID", "CREATED", "COMMAND")
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -118,8 +120,8 @@ func listInfo(showAll bool) error {
 			cmd = cmd[:truncatedPrintCmdLength] + "..."
 		}
 
-		fmt.Printf("%-10s %-15s %-10d %-20s %s\n",
-			info.ID, info.Status, info.PID,
+		fmt.Printf("%-10s %-15s %-10s %-10d %-20s %s\n",
+			info.ID, info.Image, info.Status, info.PID,
 			info.CreatedAt.Format("2006-01-02 15:04:05"), cmd)
 	}
 

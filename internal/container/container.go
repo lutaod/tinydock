@@ -103,6 +103,7 @@ func Init(
 		ID:        id,
 		PID:       pid,
 		Status:    running,
+		Image:     image,
 		Command:   args,
 		CreatedAt: time.Now(),
 		Volumes:   volumes,
