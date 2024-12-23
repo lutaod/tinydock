@@ -23,7 +23,7 @@ const (
 	truncatedPrintCmdLength = maxPrintCmdLength - 3 // Reserve space for "..."
 )
 
-var containersDir = filepath.Join(config.Root, "containers")
+var containerDir = filepath.Join(config.Root, "container")
 
 // status represents the runtime state of container.
 type status string
@@ -60,7 +60,7 @@ func generateID() string {
 
 // saveInfo persists container information to disk.
 func saveInfo(info *info) error {
-	infoPath := filepath.Join(containersDir, info.ID, infoFile)
+	infoPath := filepath.Join(containerDir, info.ID, infoFile)
 	data, err := json.Marshal(info)
 	if err != nil {
 		return fmt.Errorf("failed to marshal container info: %w", err)
@@ -75,7 +75,7 @@ func saveInfo(info *info) error {
 
 // loadInfo retrieves container information of given ID from disk.
 func loadInfo(id string) (*info, error) {
-	infoPath := filepath.Join(containersDir, id, infoFile)
+	infoPath := filepath.Join(containerDir, id, infoFile)
 	data, err := os.ReadFile(infoPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read container info: %w", err)
@@ -91,7 +91,7 @@ func loadInfo(id string) (*info, error) {
 
 // listInfo fetches container information matching the filter condition and prints them.
 func listInfo(showAll bool) error {
-	entries, err := os.ReadDir(containersDir)
+	entries, err := os.ReadDir(containerDir)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to read containers directory: %w", err)
 	}
@@ -128,7 +128,7 @@ func listInfo(showAll bool) error {
 
 // removeInfo deletes container information from disk.
 func removeInfo(id string) error {
-	infoDir := filepath.Join(containersDir, id)
+	infoDir := filepath.Join(containerDir, id)
 	if err := os.RemoveAll(infoDir); err != nil {
 		return fmt.Errorf("failed to remove container directory: %w", err)
 	}

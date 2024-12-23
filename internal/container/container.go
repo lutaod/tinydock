@@ -70,7 +70,7 @@ func Init(
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	} else {
-		logPath := filepath.Join(containersDir, id, "container.log")
+		logPath := filepath.Join(containerDir, id, "container.log")
 		logFile, err := os.Create(logPath)
 		if err != nil {
 			return fmt.Errorf("failed to create log file: %w", err)
@@ -299,7 +299,7 @@ func Logs(id string, follow bool) error {
 		return fmt.Errorf("error loading container %s: %w", id, err)
 	}
 
-	logPath := filepath.Join(containersDir, id, "container.log")
+	logPath := filepath.Join(containerDir, id, "container.log")
 	if _, err := os.Stat(logPath); err != nil {
 		return fmt.Errorf("no logs for container")
 	}
@@ -436,7 +436,7 @@ func ListImages() error {
 
 // createContainerDir creates container directory if it doesn't exist.
 func createContainerDir(id string) error {
-	containerDir := filepath.Join(containersDir, id)
+	containerDir := filepath.Join(containerDir, id)
 	if _, err := os.Stat(containerDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(containerDir, 0755); err != nil {
 			return fmt.Errorf("failed to create container directory: %w", err)
