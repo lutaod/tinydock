@@ -37,14 +37,14 @@ const (
 
 // info stores relevant information of a container.
 type info struct {
-	ID        string           `json:"id"`
-	PID       int              `json:"pid"`
-	Status    status           `json:"status"`
-	Image     string           `json:"image"`
-	Command   []string         `json:"command"`
-	CreatedAt time.Time        `json:"createdAt"`
-	Volumes   volume.Volumes   `json:"volumes"`
-	Endpoint  network.Endpoint `json:"endpoint"`
+	ID        string            `json:"id"`
+	PID       int               `json:"pid"`
+	Status    status            `json:"status"`
+	Image     string            `json:"image"`
+	Command   []string          `json:"command"`
+	CreatedAt time.Time         `json:"createdAt"`
+	Volumes   volume.Volumes    `json:"volumes"`
+	Endpoint  *network.Endpoint `json:"endpoint"`
 }
 
 // saveInfo persists container information to disk.
@@ -85,8 +85,8 @@ func listInfo(showAll bool) error {
 		return fmt.Errorf("failed to read containers directory: %w", err)
 	}
 
-	fmt.Printf("%-10s %-15s %-10s %-10s %-20s %s\n",
-		"ID", "IMAGE", "STATUS", "PID", "CREATED", "COMMAND")
+	fmt.Printf("%-10s %-15s %-10s %-10s %-20s %-20s %s\n",
+		"ID", "IMAGE", "STATUS", "PID", "PORTS", "CREATED", "COMMAND")
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -103,13 +103,22 @@ func listInfo(showAll bool) error {
 			continue
 		}
 
+		var ports string
+		if info.Endpoint != nil && len(info.Endpoint.PortMappings) > 0 {
+			mappings := make([]string, 0, len(info.Endpoint.PortMappings))
+			for _, p := range info.Endpoint.PortMappings {
+				mappings = append(mappings, fmt.Sprintf("%d->%d", p.HostPort, p.ContainerPort))
+			}
+			ports = strings.Join(mappings, ",")
+		}
+
 		cmd := strings.Join(info.Command, " ")
 		if len(cmd) > maxPrintCmdLength {
 			cmd = cmd[:truncatedPrintCmdLength] + "..."
 		}
 
-		fmt.Printf("%-10s %-15s %-10s %-10d %-20s %s\n",
-			info.ID, info.Image, info.Status, info.PID,
+		fmt.Printf("%-10s %-15s %-10s %-10d %-20s %-20s %s\n",
+			info.ID, info.Image, info.Status, info.PID, ports,
 			info.CreatedAt.Format("2006-01-02 15:04:05"), cmd)
 	}
 

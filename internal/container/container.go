@@ -82,7 +82,7 @@ func Init(
 	if err != nil {
 		return err
 	}
-	info.Endpoint = *endpoint
+	info.Endpoint = endpoint
 
 	if err := saveInfo(info); err != nil {
 		return err
@@ -203,7 +203,7 @@ func Remove(id string, force bool) error {
 	}
 
 	if info.Endpoint.IPNet != nil {
-		if err := network.Disconnect(&info.Endpoint); err != nil {
+		if err := network.Disconnect(info.Endpoint); err != nil {
 			return err
 		}
 	}
