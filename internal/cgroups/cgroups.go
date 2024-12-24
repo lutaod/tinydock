@@ -16,8 +16,33 @@ const (
 	cgroupSuffix = ".scope"
 )
 
-// Create creates a cgroup directory for container.
-func Create(containerID string) error {
+// Configure initializes cgroups for a container with the given id, pid, and resource limits.
+func Configure(id string, pid int, cpuLimit float64, memoryLimit string) error {
+	if err := create(id); err != nil {
+		return err
+	}
+
+	if err := addProcess(id, pid); err != nil {
+		return err
+	}
+
+	if memoryLimit != "" {
+		if err := setMemoryLimit(id, memoryLimit); err != nil {
+			return err
+		}
+	}
+
+	if cpuLimit != 0 {
+		if err := setCPULimit(id, cpuLimit); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// create creates a cgroup directory for container.
+func create(containerID string) error {
 	cgroupPath := filepath.Join(cgroupRoot, cgroupSlice, cgroupPrefix+containerID+cgroupSuffix)
 
 	if err := os.MkdirAll(cgroupPath, 0755); err != nil && !os.IsExist(err) {
@@ -27,8 +52,8 @@ func Create(containerID string) error {
 	return nil
 }
 
-// AddProcess adds container process to cgroup.
-func AddProcess(containerID string, pid int) error {
+// addProcess adds container process to cgroup.
+func addProcess(containerID string, pid int) error {
 	procsPath := filepath.Join(
 		cgroupRoot,
 		cgroupSlice,
@@ -36,7 +61,7 @@ func AddProcess(containerID string, pid int) error {
 		"cgroup.procs",
 	)
 
-	if err := writeFile(procsPath, strconv.Itoa(pid)); err != nil {
+	if err := os.WriteFile(procsPath, []byte(strconv.Itoa(pid)), 0644); err != nil {
 		return fmt.Errorf("failed to add cgroup for container %s: %w", containerID, err)
 	}
 
@@ -55,24 +80,8 @@ func Remove(containerID string) error {
 	return nil
 }
 
-// SetMemoryLimit sets memory limit for container.
-func SetMemoryLimit(containerID, limit string) error {
-	memoryLimitPath := filepath.Join(
-		cgroupRoot,
-		cgroupSlice,
-		cgroupPrefix+containerID+cgroupSuffix,
-		"memory.max",
-	)
-
-	if err := writeFile(memoryLimitPath, limit); err != nil {
-		return fmt.Errorf("failed to set memory limit for container %s: %w", containerID, err)
-	}
-
-	return nil
-}
-
-// SetCPULimit sets CPU limit for container.
-func SetCPULimit(containerID string, limit float64) error {
+// setCPULimit sets CPU limit for container.
+func setCPULimit(containerID string, limit float64) error {
 	availableCores := runtime.NumCPU()
 	if limit > float64(availableCores) {
 		return fmt.Errorf(
@@ -94,14 +103,25 @@ func SetCPULimit(containerID string, limit float64) error {
 	quota := int(limit * float64(period))
 	formattedLimit := fmt.Sprintf("%d %d", quota, period)
 
-	if err := writeFile(cpuLimitPath, formattedLimit); err != nil {
+	if err := os.WriteFile(cpuLimitPath, []byte(formattedLimit), 0644); err != nil {
 		return fmt.Errorf("failed to set CPU limit for container %s: %w", containerID, err)
 	}
 
 	return nil
 }
 
-// writeFile writes content to file at specified path.
-func writeFile(path, content string) error {
-	return os.WriteFile(path, []byte(content), 0644)
+// setMemoryLimit sets memory limit for container.
+func setMemoryLimit(containerID, limit string) error {
+	memoryLimitPath := filepath.Join(
+		cgroupRoot,
+		cgroupSlice,
+		cgroupPrefix+containerID+cgroupSuffix,
+		"memory.max",
+	)
+
+	if err := os.WriteFile(memoryLimitPath, []byte(limit), 0644); err != nil {
+		return fmt.Errorf("failed to set memory limit for container %s: %w", containerID, err)
+	}
+
+	return nil
 }

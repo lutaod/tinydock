@@ -4,11 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -40,68 +38,35 @@ func Init(
 		return fmt.Errorf("failed to create pipe: %w", err)
 	}
 
-	// Prepare to re-execute current program with "init" argument
-	cmd := exec.Command("/proc/self/exe", "init")
-
-	// Pass read end of pipe as fd 3 to container process
-	cmd.ExtraFiles = []*os.File{reader}
-
-	cmd.Env = append(os.Environ(), envs...)
-
-	// Set up namespace isolation for container
-	// NOTE: CLONE_NEWUSER is removed for mounting procfs
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS |
-			syscall.CLONE_NEWIPC |
-			syscall.CLONE_NEWPID |
-			syscall.CLONE_NEWNS |
-			syscall.CLONE_NEWNET,
-		Setpgid: detached,
-	}
-
 	id := generateID()
-
 	if err := createContainerDir(id); err != nil {
 		return err
 	}
 
-	if interactive {
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	} else {
-		logPath := filepath.Join(containerDir, id, "container.log")
-		logFile, err := os.Create(logPath)
-		if err != nil {
-			return fmt.Errorf("failed to create log file: %w", err)
-		}
-		cmd.Stdout = logFile
-		cmd.Stderr = logFile
+	cmd, err := prepareCmd(id, envs, interactive, detached, reader)
+	if err != nil {
+		return err
 	}
 
 	mergedDir, err := overlay.Setup(image, id, volumes)
 	if err != nil {
-		return fmt.Errorf("failed to setup overlay: %w", err)
+		return err
 	}
-
-	// Set merged overlay directory as working directory for container's root filesystem
 	cmd.Dir = mergedDir
 
-	// Spawn container process
 	if err := cmd.Start(); err != nil {
 		reader.Close()
 		return fmt.Errorf("failed to initialize container: %w", err)
 	}
 	reader.Close()
 
-	// Write user command to container process
-	writeArgsToPipe(writer, args)
-
-	pid := cmd.Process.Pid
+	if err := writeArgsToPipe(writer, args); err != nil {
+		return err
+	}
 
 	info := &info{
 		ID:        id,
-		PID:       pid,
+		PID:       cmd.Process.Pid,
 		Status:    running,
 		Image:     image,
 		Command:   args,
@@ -109,65 +74,22 @@ func Init(
 		Volumes:   volumes,
 	}
 
-	if nw != "" {
-		endpoint, err := network.Connect(nw, info.PID, ports)
-		if err != nil {
-			return err
-		}
-		info.Endpoint = *endpoint
+	if err := cgroups.Configure(id, info.PID, cpuLimit, memoryLimit); err != nil {
+		return err
 	}
 
-	network.EnableLoopback(info.PID)
+	endpoint, err := network.Setup(info.PID, nw, ports)
+	if err != nil {
+		return err
+	}
+	info.Endpoint = *endpoint
 
 	if err := saveInfo(info); err != nil {
 		return err
 	}
 
-	// Initialize cgroup for container
-	if err := cgroups.Create(id); err != nil {
+	if err := handleLifecycle(cmd, info, detached, autoRemove); err != nil {
 		return err
-	}
-
-	if err := cgroups.AddProcess(id, pid); err != nil {
-		return err
-	}
-
-	// Set memory and CPU limits if provided
-	if memoryLimit != "" {
-		if err := cgroups.SetMemoryLimit(id, memoryLimit); err != nil {
-			return err
-		}
-	}
-	if cpuLimit != 0 {
-		if err := cgroups.SetCPULimit(id, cpuLimit); err != nil {
-			return err
-		}
-	}
-
-	if detached {
-		if err := cmd.Process.Release(); err != nil {
-			return fmt.Errorf("failed to release container: %w", err)
-		}
-
-		fmt.Println(id)
-		return nil
-	}
-
-	defer func() {
-		info.Status = exited
-		if err := saveInfo(info); err != nil {
-			log.Print(err)
-		}
-
-		if autoRemove {
-			if err := Remove(id, false); err != nil {
-				log.Print(err)
-			}
-		}
-	}()
-
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("failed to wait for container: %w", err)
 	}
 
 	return nil
@@ -433,145 +355,4 @@ func ListImages() error {
 	}
 
 	return nil
-}
-
-// createContainerDir creates container directory if it doesn't exist.
-func createContainerDir(id string) error {
-	containerDir := filepath.Join(containerDir, id)
-	if _, err := os.Stat(containerDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(containerDir, 0755); err != nil {
-			return fmt.Errorf("failed to create container directory: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// writeArgsToPipe writes command arguments to write end of a pipe.
-func writeArgsToPipe(writer *os.File, args []string) error {
-	// Write args as single string with newline separators
-	argsString := strings.Join(args, "\n")
-	if _, err := writer.Write([]byte(argsString)); err != nil {
-		return fmt.Errorf("failed to write to pipe: %w", err)
-	}
-
-	if err := writer.Close(); err != nil {
-		return fmt.Errorf("failed to close pipe: %w", err)
-	}
-
-	return nil
-}
-
-// readArgsFromPipe reads command arguments from pipe on fd 3.
-func readArgsFromPipe() ([]string, error) {
-	reader := os.NewFile(uintptr(3), "pipe")
-	defer reader.Close()
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read from pipe: %w", err)
-	}
-
-	// Expect newline-separated values
-	args := strings.Split(strings.TrimSpace(string(data)), "\n")
-
-	return args, nil
-}
-
-// setupMounts configures container mounts and root filesystem.
-func setupMounts() error {
-	// Make container mounts private to prevent propagation to host
-	mountPropagationFlags := syscall.MS_SLAVE | syscall.MS_REC
-	if err := syscall.Mount("", "/", "", uintptr(mountPropagationFlags), ""); err != nil {
-		return fmt.Errorf("failed to modify root mount propagation: %w", err)
-	}
-
-	// Get new root (set by cmd.Dir in parent)
-	newRoot, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	// Create bind mount of new rootfs for pivot_root
-	mountBindFlags := syscall.MS_BIND | syscall.MS_REC
-	if err := syscall.Mount(newRoot, newRoot, "", uintptr(mountBindFlags), ""); err != nil {
-		return fmt.Errorf("failed to create bind mount: %w", err)
-	}
-
-	// Change working directory to new root before pivot_root
-	if err := os.Chdir(newRoot); err != nil {
-		return fmt.Errorf("failed to change directory: %w", err)
-	}
-
-	// Create temporary directory for old root
-	putOld := ".old_root"
-	if err := os.MkdirAll(putOld, 0700); err != nil {
-		return fmt.Errorf("failed to create temporary root dir: %w", err)
-	}
-
-	// Move root mount from old root to new root
-	if err := syscall.PivotRoot(".", putOld); err != nil {
-		return fmt.Errorf("failed to pivot root: %w", err)
-	}
-
-	// Unmount old root
-	if err := syscall.Unmount(putOld, syscall.MNT_DETACH); err != nil {
-		return fmt.Errorf("failed to unmount old root: %w", err)
-	}
-
-	// Remove old root mount point
-	if err := os.RemoveAll(putOld); err != nil {
-		return fmt.Errorf("failed to remove old root: %w", err)
-	}
-
-	// Mount procfs for process information
-	mountProcFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
-	if err := syscall.Mount("proc", "/proc", "proc", uintptr(mountProcFlags), ""); err != nil {
-		return fmt.Errorf("failed to mount procfs: %w", err)
-	}
-
-	// Mount /dev using tmpfs for device isolation
-	mountDevFlags := syscall.MS_NOSUID | syscall.MS_STRICTATIME
-	if err := syscall.Mount("tmpfs", "/dev", "tmpfs", uintptr(mountDevFlags), "mode=755"); err != nil {
-		return fmt.Errorf("failed to mount /dev: %w", err)
-	}
-
-	return nil
-}
-
-// parseSignal parses common literal signals (e.g., SIGTERM, SIGKILL) and numeric signals.
-func parseSignal(sig string) (syscall.Signal, error) {
-	if strings.HasPrefix(sig, "SIG") {
-		s := strings.ToUpper(sig)
-		switch s {
-		case "SIGINT":
-			return syscall.SIGINT, nil
-		case "SIGTERM":
-			return syscall.SIGTERM, nil
-		case "SIGKILL":
-			return syscall.SIGKILL, nil
-		default:
-			return 0, fmt.Errorf("unsupported signal: %s", sig)
-		}
-	}
-
-	sigNum, err := strconv.Atoi(sig)
-	if err != nil {
-		return 0, fmt.Errorf("invalid signal: %s", sig)
-	}
-	return syscall.Signal(sigNum), nil
-}
-
-// verifyProcess checks if process with given PID belongs to specified container.
-//
-// Required for stopping detached containers, as without a daemon, an exited
-// container's PID could be reused by the system.
-func verifyProcess(pid int, id string) bool {
-	cgroupPath := fmt.Sprintf("/proc/%d/cgroup", pid)
-	data, err := os.ReadFile(cgroupPath)
-	if err != nil {
-		return false
-	}
-
-	return strings.Contains(string(data), id)
 }

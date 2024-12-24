@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -45,18 +45,6 @@ type info struct {
 	CreatedAt time.Time        `json:"createdAt"`
 	Volumes   volume.Volumes   `json:"volumes"`
 	Endpoint  network.Endpoint `json:"endpoint"`
-}
-
-// generateID creates a random ID for container.
-func generateID() string {
-	const chars = "0123456789abcdef"
-
-	result := make([]byte, idLength)
-	for i := range result {
-		result[i] = chars[rand.Intn(len(chars))]
-	}
-
-	return string(result)
 }
 
 // saveInfo persists container information to disk.
@@ -133,6 +121,37 @@ func removeInfo(id string) error {
 	infoDir := filepath.Join(containerDir, id)
 	if err := os.RemoveAll(infoDir); err != nil {
 		return fmt.Errorf("failed to remove container directory: %w", err)
+	}
+
+	return nil
+}
+
+// handleLifecycle manages container process lifecycle, including cleanup and status updates.
+func handleLifecycle(cmd *exec.Cmd, info *info, detached bool, autoRemove bool) error {
+	if detached {
+		if err := cmd.Process.Release(); err != nil {
+			return fmt.Errorf("failed to release container: %w", err)
+		}
+
+		fmt.Println(info.ID)
+		return nil
+	}
+
+	defer func() {
+		info.Status = exited
+		if err := saveInfo(info); err != nil {
+			log.Print(err)
+		}
+
+		if autoRemove {
+			if err := Remove(info.ID, false); err != nil {
+				log.Print(err)
+			}
+		}
+	}()
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("failed to wait for container: %w", err)
 	}
 
 	return nil

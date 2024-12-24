@@ -55,6 +55,25 @@ func init() {
 	}
 }
 
+// Setup enables loopback interface for container and connects it to network if specified.
+func Setup(pid int, nw string, pms PortMappings) (*Endpoint, error) {
+	var endpoint *Endpoint
+
+	if nw != "" {
+		ep, err := Connect(pid, nw, pms)
+		if err != nil {
+			return nil, err
+		}
+		endpoint = ep
+	}
+
+	if err := EnableLoopback(pid); err != nil {
+		return nil, err
+	}
+
+	return endpoint, nil
+}
+
 // Create sets up and saves a network with given name, driver, and subnet.
 func Create(name, driver, subnet string) error {
 	d, ok := drivers[driver]
@@ -142,7 +161,7 @@ func List() error {
 }
 
 // Connect creates a network endpoint between network of given name and container specified by pid.
-func Connect(name string, pid int, pms PortMappings) (*Endpoint, error) {
+func Connect(pid int, name string, pms PortMappings) (*Endpoint, error) {
 	nw, err := load(name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load network: %w", err)
