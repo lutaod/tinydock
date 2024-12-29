@@ -107,6 +107,10 @@ func Run() error {
 		return err
 	}
 
+	if err := waitForLoopbackInterface(); err != nil {
+		return err
+	}
+
 	// Find absolute path of command
 	path, err := exec.LookPath(argv[0])
 	if err != nil {

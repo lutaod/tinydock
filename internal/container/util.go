@@ -4,12 +4,19 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
+)
+
+const (
+	// Maximum time to wait for network interface to be ready
+	networkReadyTimeout = 3 * time.Second
 )
 
 // generateID creates a random ID for container.
@@ -109,6 +116,24 @@ func readArgsFromPipe() ([]string, error) {
 	args := strings.Split(strings.TrimSpace(string(data)), "\n")
 
 	return args, nil
+}
+
+// waitForLoopbackInterface probes until container's loopback interface is ready or timeout occurs.
+//
+// This prevents container from executing network-dependent commands before networking is initialized.
+func waitForLoopbackInterface() error {
+	deadline := time.Now().Add(networkReadyTimeout)
+	for {
+		if iface, err := net.InterfaceByName("lo"); err == nil && iface.Flags&net.FlagUp != 0 {
+			return nil
+		}
+
+		if time.Now().After(deadline) {
+			return fmt.Errorf("loopback interface not ready after %v", networkReadyTimeout)
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // setupMounts configures container mounts and root filesystem.
