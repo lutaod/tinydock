@@ -14,11 +14,6 @@ import (
 	"time"
 )
 
-const (
-	// Maximum time to wait for network interface to be ready
-	networkReadyTimeout = 3 * time.Second
-)
-
 // generateID creates a random ID for container.
 func generateID() string {
 	const chars = "0123456789abcdef"
@@ -118,18 +113,20 @@ func readArgsFromPipe() ([]string, error) {
 	return args, nil
 }
 
-// waitForLoopbackInterface probes until container's loopback interface is ready or timeout occurs.
+// waitForLoopbackInterface waits up to 1s for container's loopback interface to be ready.
 //
 // This prevents container from executing network-dependent commands before networking is initialized.
 func waitForLoopbackInterface() error {
-	deadline := time.Now().Add(networkReadyTimeout)
+	timeout := 1 * time.Second
+	deadline := time.Now().Add(timeout)
+
 	for {
 		if iface, err := net.InterfaceByName("lo"); err == nil && iface.Flags&net.FlagUp != 0 {
 			return nil
 		}
 
 		if time.Now().After(deadline) {
-			return fmt.Errorf("loopback interface not ready after %v", networkReadyTimeout)
+			return fmt.Errorf("loopback interface not ready after %v", timeout)
 		}
 
 		time.Sleep(100 * time.Millisecond)
