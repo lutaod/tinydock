@@ -85,8 +85,8 @@ func listInfo(showAll bool) error {
 		return fmt.Errorf("failed to read containers directory: %w", err)
 	}
 
-	fmt.Printf("%-10s %-15s %-10s %-10s %-20s %-20s %s\n",
-		"ID", "IMAGE", "STATUS", "PID", "PORTS", "CREATED", "COMMAND")
+	fmt.Printf("%-10s %-10s %-15s %-15s %-15s %-8s %-20s %s\n",
+		"ID", "STATUS", "IMAGE", "IP", "PORTS", "PID", "CREATED", "COMMAND")
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -103,13 +103,16 @@ func listInfo(showAll bool) error {
 			continue
 		}
 
-		var ports string
-		if info.Endpoint != nil && len(info.Endpoint.PortMappings) > 0 {
-			mappings := make([]string, 0, len(info.Endpoint.PortMappings))
-			for _, p := range info.Endpoint.PortMappings {
-				mappings = append(mappings, fmt.Sprintf("%d->%d", p.HostPort, p.ContainerPort))
+		var ip, ports string
+		if info.Endpoint != nil {
+			ip = info.Endpoint.IPNet.IP.String()
+			if len(info.Endpoint.PortMappings) > 0 {
+				mappings := make([]string, 0, len(info.Endpoint.PortMappings))
+				for _, p := range info.Endpoint.PortMappings {
+					mappings = append(mappings, fmt.Sprintf("%d->%d", p.HostPort, p.ContainerPort))
+				}
+				ports = strings.Join(mappings, ",")
 			}
-			ports = strings.Join(mappings, ",")
 		}
 
 		cmd := strings.Join(info.Command, " ")
@@ -117,8 +120,8 @@ func listInfo(showAll bool) error {
 			cmd = cmd[:truncatedPrintCmdLength] + "..."
 		}
 
-		fmt.Printf("%-10s %-15s %-10s %-10d %-20s %-20s %s\n",
-			info.ID, info.Image, info.Status, info.PID, ports,
+		fmt.Printf("%-10s %-10s %-15s %-15s %-15s %-8d %-20s %s\n",
+			info.ID, info.Status, info.Image, ip, ports, info.PID,
 			info.CreatedAt.Format("2006-01-02 15:04:05"), cmd)
 	}
 
