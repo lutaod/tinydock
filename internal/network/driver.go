@@ -141,11 +141,6 @@ func (d *BridgeDriver) configureContainerNetwork(containerVeth string, ep *Endpo
 		return fmt.Errorf("failed to find container interface: %w", err)
 	}
 
-	// Rename interface to eth0 for consistency
-	if err := netlink.LinkSetName(peer, "eth0"); err != nil {
-		return fmt.Errorf("failed to rename peer interface: %w", err)
-	}
-
 	addr := &netlink.Addr{IPNet: ep.IPNet}
 	if err := netlink.AddrAdd(peer, addr); err != nil {
 		return fmt.Errorf("failed to set container IP: %w", err)
