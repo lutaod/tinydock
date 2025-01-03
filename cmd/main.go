@@ -268,7 +268,7 @@ func newNetworkCmd() *ffcli.Command {
 func newNetworkCreateCmd() *ffcli.Command {
 	networkCreateFlagSet := flag.NewFlagSet("network create", flag.ExitOnError)
 
-	driver := networkCreateFlagSet.String("driver", "bridge", "Driver to manage the Network")
+	driver := networkCreateFlagSet.String("driver", "", "Driver to manage the Network")
 	subnet := networkCreateFlagSet.String("subnet", "", "Subnet in CIDR format")
 
 	return &ffcli.Command{

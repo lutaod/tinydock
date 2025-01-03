@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	defaultDriver = "bridge"
 	defaultSubnet = "172.26.0.0/16"
 )
 
@@ -76,6 +77,10 @@ func Setup(pid int, nw string, pms PortMappings) (*Endpoint, error) {
 
 // Create sets up and saves a network with given name, driver, and subnet.
 func Create(name, driver, subnet string) error {
+	if driver == "" {
+		driver = defaultDriver
+	}
+
 	d, ok := drivers[driver]
 	if !ok {
 		return fmt.Errorf("unsupported driver: %s", driver)
