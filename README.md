@@ -1,12 +1,11 @@
 # tinydock
 
-A proof-of-concept container runtime implementation in Go. Built for educational purposes to understand core containerization concepts.
-
-This project implements basic container functionalities, including:
+A proof-of-concept container runtime implementation in Go. Built for better understanding of core containerization concepts, including:
 - Process isolation
 - Resource limits
-- Volume support
-- Networking
+- File system layering
+- Bridge networking
+- Base image management
 
 ## Setup
 
@@ -59,4 +58,46 @@ $ sudo mv alpine.tar.gz /var/lib/tinydock/image/registry/
 $ sudo ./tinydock run alpine sh
 ```
 
-NOTE: Docker images with preset entrypoints are not yet supported by this implementation. Users must explicitly provide the command to run in the container.
+NOTE: Docker images with preset entrypoints are not supported by this implementation. Users must explicitly provide the command to run in the container.
+
+## Multi-Container Example with Redis
+
+Before trying this example, follow the previous section to prepare a `redis` image.
+
+```bash
+# Create persistent data directory
+$ export REDIS_DATA=<YOUR_PREFERRED_LOCATION>
+
+# Create bridge network
+$ sudo ./tinydock network create -driver bridge -subnet 172.27.0.0/16 redis-nw
+
+# Start redis server container with persistence and network
+$ sudo ./tinydock run -d \
+   -network redis-nw \
+   -e LC_ALL=C.UTF-8 \
+   -v $REDIS_DATA:/data \
+   redis redis-server \
+   --bind 0.0.0.0 \
+   --dir /data \
+   --appendonly yes 
+
+# Inspect redis server container and check its assigned IP (should be 172.27.0.2)
+$ sudo ./tinydock ls
+
+# Test connection
+$ sudo ./tinydock run -it -rm -network redis-nw \
+   redis redis-cli -h 172.27.0.2 ping
+
+# Store and retrieve data
+$ sudo ./tinydock run -it -rm -network redis-nw \
+   redis redis-cli -h 172.27.0.2 set greeting "hello"
+$ sudo ./tinydock run -it -rm -network redis-nw \
+   redis redis-cli -h 172.27.0.2 get greeting
+
+# Verify data persistence
+$ ls -l $REDIS_DATA
+
+# Cleanup
+$ sudo ./tinydock rm -f <REDIS_SERVER_CONTAINER_ID>
+$ sudo ./tinydock network rm redis-nw
+```
