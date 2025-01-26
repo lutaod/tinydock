@@ -52,7 +52,13 @@ func prepareCmd(
 	// Pass read end of pipe as fd 3 to container process
 	cmd.ExtraFiles = []*os.File{reader}
 
-	cmd.Env = append(os.Environ(), envs...)
+	cmd.Env = []string{
+		fmt.Sprintf("HOSTNAME=%s", id),
+		"HOME=/root",
+		"TERM=xterm",
+		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+	}
+	cmd.Env = append(cmd.Env, envs...)
 
 	// Set up namespace isolation for container
 	// NOTE: CLONE_NEWUSER is removed for mounting procfs
