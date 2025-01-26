@@ -97,6 +97,13 @@ func Init(
 
 // Run takes over after container creation and executes user command inside container.
 func Run() error {
+	// Complete namespace isolation
+	if hostname := os.Getenv("HOSTNAME"); hostname != "" {
+		if err := syscall.Sethostname([]byte(hostname)); err != nil {
+			return err
+		}
+	}
+
 	// Retrieve command arguments written by parent process
 	argv, err := readArgsFromPipe()
 	if err != nil {
