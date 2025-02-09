@@ -147,7 +147,7 @@ func Remove(name string) error {
 	}
 
 	if err := disableExternalAccess(nw); err != nil {
-		return fmt.Errorf("disable external access: %w", err)
+		log.Printf("Error disabling external access %s: %v", nw.Gateway.String(), err)
 	}
 
 	_, prefix, err := net.ParseCIDR(nw.Gateway.String())
@@ -241,7 +241,7 @@ func Connect(pid int, name string, pms PortMappings) (*Endpoint, error) {
 // Disconnect removes network endpoint and releases its resources.
 func Disconnect(ep *Endpoint) error {
 	if err := cleanupPortForwarding(ep); err != nil {
-
+		log.Printf("Error cleaning up port forwarding %s: %v", ep.IPNet.String(), err)
 	}
 
 	return ipamer.ReleaseIP(ep.IPNet)
