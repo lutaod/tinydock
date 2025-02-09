@@ -21,7 +21,7 @@ func enableExternalAccess(nw *Network) error {
 	return execIptables(
 		"-t", "nat",
 		"-A", "POSTROUTING",
-		"-s", nw.Subnet.String(),
+		"-s", nw.Gateway.String(),
 		"!", "-o", "br-"+nw.Name,
 		"-j", "MASQUERADE",
 	)
@@ -32,7 +32,7 @@ func disableExternalAccess(nw *Network) error {
 	return execIptables(
 		"-t", "nat",
 		"-D", "POSTROUTING",
-		"-s", nw.Subnet.String(),
+		"-s", nw.Gateway.String(),
 		"!", "-o", "br-"+nw.Name,
 		"-j", "MASQUERADE",
 	)

@@ -49,9 +49,9 @@ func (d *BridgeDriver) create(name string, subnet *net.IPNet) (*Network, error) 
 	}
 
 	return &Network{
-		Name:   name,
-		Subnet: subnet,
-		Driver: "bridge",
+		Name:    name,
+		Gateway: subnet,
+		Driver:  "bridge",
 	}, nil
 }
 
@@ -154,7 +154,7 @@ func (d *BridgeDriver) configureContainerNetwork(containerVeth string, ep *Endpo
 	route := &netlink.Route{
 		Scope:     netlink.SCOPE_UNIVERSE,
 		LinkIndex: peer.Attrs().Index,
-		Gw:        nw.Subnet.IP,
+		Gw:        nw.Gateway.IP,
 		Dst:       nil,
 	}
 	if err := netlink.RouteAdd(route); err != nil {

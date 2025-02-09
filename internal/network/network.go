@@ -13,6 +13,7 @@ import (
 	"github.com/vishvananda/netns"
 
 	"github.com/lutaod/tinydock/internal/config"
+	"github.com/lutaod/tinydock/pkg/ipam"
 )
 
 const (
@@ -27,14 +28,14 @@ var (
 		"bridge": &BridgeDriver{},
 	}
 
-	allocator *ipAllocator
+	ipamer *ipam.IPAM
 )
 
 // Network represents network configuration.
 type Network struct {
-	Name   string     `json:"name"`
-	Subnet *net.IPNet `json:"subnet"`
-	Driver string     `json:"driver"`
+	Name    string     `json:"name"`
+	Gateway *net.IPNet `json:"gateway"`
+	Driver  string     `json:"driver"`
 }
 
 // Endpoint represents network endpoint configuration for single container.
@@ -50,7 +51,7 @@ type Endpoint struct {
 // init initializes global IP allocator during package load.
 func init() {
 	var err error
-	allocator, err = newIPAllocator()
+	ipamer, err = ipam.New(filepath.Join(networkDir, "ipam", "ipam.json"))
 	if err != nil {
 		panic(err)
 	}
@@ -80,7 +81,6 @@ func Create(name, driver, subnet string) error {
 	if driver == "" {
 		driver = defaultDriver
 	}
-
 	d, ok := drivers[driver]
 	if !ok {
 		return fmt.Errorf("unsupported driver: %s", driver)
@@ -89,28 +89,44 @@ func Create(name, driver, subnet string) error {
 	if subnet == "" {
 		subnet = defaultSubnet
 	}
-	_, ipNet, err := net.ParseCIDR(subnet)
+	_, prefixNet, err := net.ParseCIDR(subnet)
 	if err != nil {
 		return fmt.Errorf("failed to parse subnet: %w", err)
 	}
 
-	gatewayIPNet, err := allocator.requestIP(ipNet, true)
-	if err != nil {
-		return fmt.Errorf("failed to request IP: %w", err)
+	// First create the prefix
+	if err := ipamer.CreatePrefix(subnet); err != nil {
+		return fmt.Errorf("failed to create prefix: %w", err)
 	}
-	ipNet.IP = gatewayIPNet.IP
 
-	nw, err := d.create(name, ipNet)
+	// Request gateway IP from prefix
+	gatewayIPNet, err := ipamer.RequestIP(prefixNet)
 	if err != nil {
-		if releaseErr := allocator.releasePrefix(ipNet); releaseErr != nil {
-			log.Printf("failed to release IP after failed network creation: %v", releaseErr)
+		if releaseErr := ipamer.ReleasePrefix(prefixNet); releaseErr != nil {
+			log.Printf("failed to release prefix after IP request failure: %v", releaseErr)
+		}
+		return fmt.Errorf("failed to request gateway IP: %w", err)
+	}
+
+	nw, err := d.create(name, gatewayIPNet)
+	if err != nil {
+		// Clean up IP and prefix on failure
+		if releaseErr := ipamer.ReleaseIP(gatewayIPNet); releaseErr != nil {
+			log.Printf("failed to release gateway IP after network creation failure: %v", releaseErr)
+		}
+		if releaseErr := ipamer.ReleasePrefix(prefixNet); releaseErr != nil {
+			log.Printf("failed to release prefix after network creation failure: %v", releaseErr)
 		}
 		return fmt.Errorf("failed to set up network: %w", err)
 	}
 
 	if err := enableExternalAccess(nw); err != nil {
-		if releaseErr := allocator.releasePrefix(ipNet); releaseErr != nil {
-			log.Printf("failed to release IP after failed network creation: %v", releaseErr)
+		// Clean up network resources, IP, and prefix on failure
+		if releaseErr := ipamer.ReleaseIP(gatewayIPNet); releaseErr != nil {
+			log.Printf("failed to release gateway IP after external access failure: %v", releaseErr)
+		}
+		if releaseErr := ipamer.ReleasePrefix(prefixNet); releaseErr != nil {
+			log.Printf("failed to release prefix after external access failure: %v", releaseErr)
 		}
 		return fmt.Errorf("failed to enable external access: %w", err)
 	}
@@ -134,7 +150,18 @@ func Remove(name string) error {
 		return fmt.Errorf("disable external access: %w", err)
 	}
 
-	if err := allocator.releasePrefix(nw.Subnet); err != nil {
+	_, prefix, err := net.ParseCIDR(nw.Gateway.String())
+	if err != nil {
+		return fmt.Errorf("invalid gateway network %s: %w", nw.Gateway, err)
+	}
+
+	// Release gateway IP first
+	if err := ipamer.ReleaseIP(nw.Gateway); err != nil {
+		log.Printf("failed to release gateway IP: %v", err) // Log but continue
+	}
+
+	// Then release the prefix
+	if err := ipamer.ReleasePrefix(prefix); err != nil {
 		return fmt.Errorf("failed to release prefix: %w", err)
 	}
 
@@ -152,13 +179,13 @@ func List() error {
 		return fmt.Errorf("failed to load networks: %w", err)
 	}
 
-	fmt.Printf("%-15s %-10s %s\n", "NAME", "DRIVER", "SUBNET")
+	fmt.Printf("%-15s %-10s %s\n", "NAME", "DRIVER", "GATEWAY")
 
 	for _, nw := range networks {
 		fmt.Printf("%-15s %-10s %s\n",
 			nw.Name,
 			nw.Driver,
-			nw.Subnet.String(),
+			nw.Gateway.String(),
 		)
 	}
 
@@ -177,7 +204,12 @@ func Connect(pid int, name string, pms PortMappings) (*Endpoint, error) {
 		return nil, fmt.Errorf("driver not found: %s", nw.Driver)
 	}
 
-	ipNet, err := allocator.requestIP(nw.Subnet, false)
+	_, prefix, err := net.ParseCIDR(nw.Gateway.String())
+	if err != nil {
+		return nil, fmt.Errorf("invalid gateway network %s: %w", nw.Gateway, err)
+	}
+
+	ipNet, err := ipamer.RequestIP(prefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request IP: %w", err)
 	}
@@ -188,7 +220,7 @@ func Connect(pid int, name string, pms PortMappings) (*Endpoint, error) {
 	}
 
 	if err := d.connect(nw, ep, pid); err != nil {
-		if releaseErr := allocator.releaseIP(ep.IPNet); releaseErr != nil {
+		if releaseErr := ipamer.ReleaseIP(ep.IPNet); releaseErr != nil {
 			log.Printf("Error release IP %s: %v", ep.IPNet.String(), releaseErr)
 		}
 		return nil, fmt.Errorf("failed to connect to network: %w", err)
@@ -196,7 +228,7 @@ func Connect(pid int, name string, pms PortMappings) (*Endpoint, error) {
 
 	if len(pms) > 0 {
 		if err := setupPortForwarding(ep); err != nil {
-			if releaseErr := allocator.releaseIP(ep.IPNet); releaseErr != nil {
+			if releaseErr := ipamer.ReleaseIP(ep.IPNet); releaseErr != nil {
 				log.Printf("Error releasing IP %s: %v", ep.IPNet.String(), releaseErr)
 			}
 			return nil, err
@@ -212,7 +244,7 @@ func Disconnect(ep *Endpoint) error {
 
 	}
 
-	return allocator.releaseIP(ep.IPNet)
+	return ipamer.ReleaseIP(ep.IPNet)
 }
 
 // EnableLoopback sets up loopback interface in container's network namespace.
