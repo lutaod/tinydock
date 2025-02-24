@@ -1,6 +1,6 @@
 # tinydock
 
-A proof-of-concept container runtime implementation in Go. Built for better understanding of core containerization concepts, including:
+A lightweight container runtime implementation in Go, supporting:
 - Process isolation
 - Resource limits
 - File system layering
@@ -11,8 +11,8 @@ A proof-of-concept container runtime implementation in Go. Built for better unde
 
 ### Prerequisites
 
-- Linux (tested on Ubuntu 22.04)
-- Go 1.23 or newer
+- Ubuntu 22.04 or later
+- Go 1.23 or later
 - Root privileges
 
 ### Steps
